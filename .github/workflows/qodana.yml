@@ -29,6 +29,8 @@ jobs:
         uses: JetBrains/qodana-action@v2026.1
         with:
           args: "--project-dir,backend"
+          # Projeto em subpasta: pr-mode injeta --changes e quebra fora da raiz
+          pr-mode: false
         env:
           # Opcional: crie o projeto em https://qodana.cloud e adicione o segredo
           # QODANA_TOKEN no repositório para publicar os resultados na nuvem.
