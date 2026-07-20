@@ -28,7 +28,8 @@ services:
       POSTGRES_USER: chegadebet
       POSTGRES_PASSWORD: chegadebet
     ports:
-      - "5432:5432"
+      # Exposto apenas ao localhost: não fica acessível na LAN
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -45,7 +46,7 @@ services:
     volumes:
       - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     restart: unless-stopped
 
   # Agregação de logs
@@ -57,7 +58,7 @@ services:
       - ./observability/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
       - loki-data:/loki
     ports:
-      - "3100:3100"
+      - "127.0.0.1:3100:3100"
     restart: unless-stopped
 
   # Coleta os logs dos contêineres e envia ao Loki (substitui o Promtail, agora EOL)
@@ -72,7 +73,7 @@ services:
       - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     ports:
-      - "12345:12345"
+      - "127.0.0.1:12345:12345"
     depends_on:
       - loki
     restart: unless-stopped
@@ -90,7 +91,8 @@ services:
       - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
     ports:
-      - "3000:3000"
+      # admin/admin + login anônimo: mantido só no localhost
+      - "127.0.0.1:3000:3000"
     depends_on:
       - prometheus
       - loki

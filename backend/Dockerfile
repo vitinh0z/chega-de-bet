@@ -16,7 +16,7 @@ WORKDIR /app
 # Usuário sem privilégios
 RUN groupadd --system spring && useradd --system --gid spring spring
 
-COPY --from=build /app/target/*.jar app.jar
+COPY --from=build /app/target/app.jar app.jar
 USER spring
 
 EXPOSE 8080
