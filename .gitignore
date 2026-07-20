@@ -1,0 +1,20 @@
+# Dependências
+node_modules/
+dist/
+build/
+*.zip
+
+# Ambiente
+.env
+.env.local
+
+# Editor / OS / ferramentas
+.vscode/
+.idea/
+.omc/
+.DS_Store
+Thumbs.db
+
+# Chaves de assinatura da blocklist (NUNCA versionar a privada)
+*.pem
+private-key*
