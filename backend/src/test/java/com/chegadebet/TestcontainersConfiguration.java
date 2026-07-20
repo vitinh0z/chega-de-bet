@@ -10,7 +10,8 @@ class TestcontainersConfiguration {
 
     @Bean
     @ServiceConnection
-    PostgreSQLContainer<?> postgresContainer() {
-        return new PostgreSQLContainer<>("postgres:18.4");
+    PostgreSQLContainer postgresContainer() {
+        // No Testcontainers 2.0 os *Container deixaram de ser genéricos (sem <>)
+        return new PostgreSQLContainer("postgres:18.4");
     }
 }
