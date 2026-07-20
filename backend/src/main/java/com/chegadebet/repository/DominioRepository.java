@@ -1,0 +1,8 @@
+package com.chegadebet.repository;
+
+// TODO: estender JpaRepository<Dominio, Long>.
+//   Queries sugeridas:
+//     - Optional<Dominio> findByHost(String host)
+//     - List<Dominio> findByStatusOrderByScoreDesc(StatusDominio status)
+public interface DominioRepository {
+}

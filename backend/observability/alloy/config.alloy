@@ -1,0 +1,29 @@
+// Descobre os contêineres Docker em execução
+discovery.docker "containers" {
+	host = "unix:///var/run/docker.sock"
+}
+
+// Extrai o nome do contêiner como label "container"
+discovery.relabel "containers" {
+	targets = discovery.docker.containers.targets
+
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/(.*)"
+		target_label  = "container"
+	}
+}
+
+// Lê os logs (stdout/stderr) dos contêineres e encaminha ao Loki
+loki.source.docker "containers" {
+	host       = "unix:///var/run/docker.sock"
+	targets    = discovery.relabel.containers.output
+	forward_to = [loki.write.default.receiver]
+}
+
+// Escreve no Loki
+loki.write "default" {
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
+	}
+}

@@ -1,0 +1,11 @@
+spring:
+  jpa:
+    show-sql: false
+
+# Logs estruturados em JSON (formato Logstash) para ingestão pelo Loki
+logging:
+  structured:
+    format:
+      console: logstash
+  level:
+    root: info
