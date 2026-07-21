@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Métricas expostas pelo Actuator/Micrometer da aplicação
+  - job_name: chega-de-bet-backend
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["app:8080"]
+
+  # Auto-monitoramento do Prometheus
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

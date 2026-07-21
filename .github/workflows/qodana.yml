@@ -1,0 +1,37 @@
+name: Qodana
+
+on:
+  push:
+    branches: [develop, main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/qodana.yml"
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/qodana.yml"
+
+jobs:
+  qodana:
+    name: Análise estática (Qodana)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      checks: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Qodana Scan
+        uses: JetBrains/qodana-action@v2026.1
+        with:
+          args: "--project-dir,backend"
+          # Projeto em subpasta: pr-mode injeta --changes e quebra fora da raiz
+          pr-mode: false
+        env:
+          # Opcional: crie o projeto em https://qodana.cloud e adicione o segredo
+          # QODANA_TOKEN no repositório para publicar os resultados na nuvem.
+          QODANA_TOKEN: ${{ secrets.QODANA_TOKEN }}

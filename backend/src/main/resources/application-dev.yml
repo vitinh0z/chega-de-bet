@@ -1,0 +1,9 @@
+spring:
+  jpa:
+    show-sql: true
+
+logging:
+  level:
+    org.hibernate.SQL: debug
+    org.springframework.web: debug
+# Em dev os logs ficam no formato legível padrão (não estruturado)

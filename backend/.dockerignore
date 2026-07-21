@@ -1,0 +1,11 @@
+target/
+.git/
+.gitignore
+.idea/
+*.iml
+.mvn/
+observability/
+docker-compose.yml
+README.md
+qodana.yaml
+Makefile
