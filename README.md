@@ -2,7 +2,7 @@
 
 Extensão de navegador, open source e focada em privacidade, que bloqueia anúncios e domínios de apostas (casas de bet, cassino online e slots do tipo "tigrinho"). A lista de bloqueio é mantida de forma colaborativa e moderada, e o projeto é financiado por doação — sem anúncios e sem rastreamento.
 
-**Status:** em fase de análise. Ainda não há código publicado.
+**Status:** em desenvolvimento inicial. O esqueleto do backend (Spring Boot) já está no repositório; a extensão está em construção.
 
 ---
 
@@ -36,6 +36,11 @@ Bloquear anúncio de aposta não é censurar algo ilegal — é higiene de expos
 ## Como funciona, em linhas gerais
 
 A extensão carrega uma lista de bloqueio assinada e impede que o navegador acesse os domínios listados, antes mesmo da requisição ser feita. A lista tem três fontes de alimentação: uma base curada por mantenedores, denúncias da comunidade que passam por moderação, e sinais auxiliares que apenas ajudam a priorizar a fila de revisão. Quando o usuário clica em um link direto de aposta, uma página de aviso explica o bloqueio e oferece informação de apoio a jogo compulsivo.
+
+## Documentação
+
+- [Visão geral da ideia](docs/visao-geral.md) — o ciclo do projeto e os pilares, em diagramas.
+- [Arquitetura (backend, frontend e cliente)](docs/arquitetura.md) — a visão técnica de ponta a ponta.
 
 ## Como apoiar
 
