@@ -1,0 +1,16 @@
+# Normaliza quebras de linha: LF no repositório para arquivos de texto
+* text=auto eol=lf
+
+# Arquivos que DEVEM ser LF (quebram com CRLF em ambiente Linux/contêiner)
+*.sh        text eol=lf
+Dockerfile  text eol=lf
+*.alloy     text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+Makefile    text eol=lf
+
+# Binários (sem conversão)
+*.jar   binary
+*.png   binary
+*.jpg   binary
+*.ico   binary

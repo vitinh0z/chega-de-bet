@@ -1,0 +1,3 @@
+# Coloque aqui as migrations do Flyway.
+# Convenção de nomenclatura: V<versão>__<descrição>.sql
+# Ex.: V1__cria_tabela_dominio.sql

@@ -1,0 +1,19 @@
+version: "1.0"
+
+# Linter JVM (edição Community, gratuita) para projetos Java/Maven
+linter: jetbrains/qodana-jvm-community:latest
+
+# Perfil de inspeções recomendado pela JetBrains
+profile:
+  name: qodana.recommended
+
+# Falha o job apenas em problemas críticos (ajuste conforme o projeto amadurece)
+failureConditions:
+  severityThresholds:
+    critical: 0
+
+exclude:
+  - name: All
+    paths:
+      - target
+      - observability
