@@ -1,5 +1,7 @@
 package com.chegadebet.exception;
 
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -21,7 +23,11 @@ import java.util.stream.Collectors;
  * Estende ResponseEntityExceptionHandler para que os erros próprios do Spring MVC
  * (JSON malformado, parâmetro ausente, método não suportado...) mantenham o status
  * correto em vez de caírem no 500 genérico.
+ * <p>
+ * A classe é {@code @NullMarked} para seguir o contrato do Spring 7 (JSpecify):
+ * tudo é não-nulo por padrão, e só o que está marcado com {@code @Nullable} aceita nulo.
  */
+@NullMarked
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
@@ -29,10 +35,10 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     /** Falhas de @Valid no corpo da requisição -> 400 listando os campos inválidos. */
     @Override
-    protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException ex,
-                                                                  HttpHeaders headers,
-                                                                  HttpStatusCode status,
-                                                                  WebRequest request) {
+    protected @Nullable ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException ex,
+                                                                           HttpHeaders headers,
+                                                                           HttpStatusCode status,
+                                                                           WebRequest request) {
         String mensagem = ex.getBindingResult().getFieldErrors().stream()
                 .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
                 .collect(Collectors.joining("; "));
@@ -41,8 +47,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(RecursoNaoEncontradoException.class)
     public ResponseEntity<ErroResponse> handleNaoEncontrado(RecursoNaoEncontradoException ex, WebRequest request) {
+        String mensagem = (ex.getMessage() != null) ? ex.getMessage() : "Recurso não encontrado";
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(erro(HttpStatus.NOT_FOUND, ex.getMessage(), request));
+                .body(erro(HttpStatus.NOT_FOUND, mensagem, request));
     }
 
     /**
@@ -58,11 +65,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     /** Padroniza no formato ErroResponse também os erros tratados pela classe base. */
     @Override
-    protected ResponseEntity<Object> handleExceptionInternal(Exception ex,
-                                                             Object body,
-                                                             HttpHeaders headers,
-                                                             HttpStatusCode statusCode,
-                                                             WebRequest request) {
+    protected @Nullable ResponseEntity<Object> handleExceptionInternal(Exception ex,
+                                                                      @Nullable Object body,
+                                                                      HttpHeaders headers,
+                                                                      HttpStatusCode statusCode,
+                                                                      WebRequest request) {
         Object corpo = (body instanceof ErroResponse) ? body : erro(statusCode, mensagemDe(ex, statusCode), request);
         return super.handleExceptionInternal(ex, corpo, headers, statusCode, request);
     }
