@@ -1,6 +1,6 @@
 package com.chegadebet.repository;
 
-// TODO: estender JpaRepository<Denuncia, Long>.
+// TODO: estender JpaRepository<Denuncia, UUID>.
 //   Queries sugeridas:
 //     - long countByDominio(Dominio dominio)  (deduplicação)
 //     - contagem de denunciantes distintos por domínio
