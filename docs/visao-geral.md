@@ -1,10 +1,10 @@
 # Visão geral da ideia
 
-Este documento mostra, em alto nível, **como o Chega de Bet funciona como ideia** — o ciclo entre quem usa, a comunidade que denuncia e a lista que bloqueia. Os detalhes internos de implementação ficam na documentação técnica do projeto.
+Este documento mostra, em alto nível, **como o Chega de Bet funciona como ideia** — o ciclo entre quem usa, a comunidade que denuncia e a blocklist que bloqueia. Os detalhes técnicos de implementação ficam em [Arquitetura](arquitetura.md).
 
 ## O ciclo do projeto
 
-A extensão bloqueia localmente com base numa lista; a comunidade alimenta essa lista por denúncia; a moderação humana decide o que entra; e doações pagam a infraestrutura que distribui a lista de volta para todo mundo.
+A extensão bloqueia localmente com base na blocklist. A comunidade alimenta a blocklist por denúncia. A moderação humana decide o que entra. Doações pagam a infraestrutura que distribui a blocklist de volta para todo mundo.
 
 ```mermaid
 flowchart TD
