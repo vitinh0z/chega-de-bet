@@ -121,4 +121,4 @@ flowchart LR
 
 ---
 
-> Princípio central: **o bloqueio é local e determinístico no cliente; a inteligência e a curadoria são remotas e humanas no backend/frontend.** A comunicação é sempre HTTPS com JSON, e a blocklist trafega assinada.
+> Princípio central: **o bloqueio é local e determinístico no cliente.** A inteligência e a curadoria são remotas e humanas, no backend e no frontend. A comunicação entre camadas é sempre HTTPS com JSON, e a blocklist trafega assinada.
