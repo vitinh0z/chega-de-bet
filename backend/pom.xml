@@ -56,10 +56,13 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Migrations de banco -->
+        <!-- Migrations de banco.
+             No Spring Boot 4 a auto-configuração do Flyway saiu do módulo monolítico:
+             flyway-core sozinho não é mais detectado. O starter é quem traz a
+             auto-config (+ o flyway-core transitivamente) e faz as migrations rodarem. -->
         <dependency>
-            <groupId>org.flywaydb</groupId>
-            <artifactId>flyway-core</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-flyway</artifactId>
         </dependency>
         <dependency>
             <groupId>org.flywaydb</groupId>
