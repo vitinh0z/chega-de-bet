@@ -1,5 +1,7 @@
 # Chega de Bet
 
+[![Discord](https://img.shields.io/badge/Discord-entrar-5865F2?logo=discord&logoColor=white)](https://discord.gg/CVT4YzymJ7)
+
 Chega de Bet é uma extensão de navegador que bloqueia anúncios e domínios de apostas: casas de bet, cassino online e slots do tipo "tigrinho". O projeto é open source, focado em privacidade e financiado só por doação. Não exibe anúncios e não rastreia quem usa.
 
 A lista de domínios bloqueados (a blocklist) não é feita por uma pessoa só. Qualquer um pode denunciar um domínio suspeito. Uma pessoa moderadora revisa cada denúncia antes de qualquer bloqueio entrar em vigor.
@@ -52,6 +54,14 @@ Quando alguém tenta acessar um domínio bloqueado, a extensão mostra uma tela 
 - [Arquitetura](docs/arquitetura.md) — a visão técnica de ponta a ponta (backend, frontend e cliente).
 - [Como rodar o projeto](docs/como-rodar.md) — passo a passo para subir o ambiente localmente.
 - [Como contribuir](CONTRIBUTING.md) — denúncia de domínios, código, revisão e tradução.
+
+## Comunidade
+
+O desenvolvimento acontece à vista de todos. Entre no Discord para acompanhar o projeto, tirar dúvidas, sugerir melhorias e ajudar na discussão de domínios:
+
+- **Discord:** https://discord.gg/CVT4YzymJ7
+
+As denúncias formais continuam sendo feitas pela extensão, de forma anônima e com moderação humana — o Discord é o espaço de conversa da comunidade, não um canal de coleta de dados.
 
 ## Como apoiar
 
