@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Comunidade no Discord
+    url: https://discord.gg/CVT4YzymJ7
+    about: Dúvidas, discussão e suporte geral acontecem no nosso Discord.
+  - name: 🔒 Vulnerabilidade de segurança
+    url: https://github.com/vitinh0z/chega-de-bet/security/advisories/new
+    about: Não abra uma issue pública. Reporte falhas de segurança em privado (veja o SECURITY.md).

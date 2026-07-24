@@ -1,0 +1,33 @@
+name: ⚪ Falso positivo (site bloqueado por engano)
+description: Reportar um site legítimo que está sendo bloqueado indevidamente.
+labels: [moderacao, blocklist]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Falso positivo é tratado como **falha crítica** no projeto. Obrigado por reportar — isso ajuda a proteger sites legítimos.
+  - type: input
+    id: dominio
+    attributes:
+      label: Domínio bloqueado indevidamente
+      placeholder: "site-legitimo.com"
+    validations:
+      required: true
+  - type: textarea
+    id: contexto
+    attributes:
+      label: Por que é um falso positivo?
+      description: O que é o site e por que ele não deveria estar na blocklist?
+    validations:
+      required: true
+  - type: input
+    id: versao
+    attributes:
+      label: Versão da lista / extensão (se souber)
+  - type: checkboxes
+    id: privacidade
+    attributes:
+      label: Privacidade
+      options:
+        - label: Não incluí dados pessoais neste relatório.
+          required: true
