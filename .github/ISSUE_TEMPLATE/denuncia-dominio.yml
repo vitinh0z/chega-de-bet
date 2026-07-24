@@ -1,0 +1,45 @@
+name: 🚩 Denúncia de domínio
+description: Sugerir um domínio de aposta para análise da moderação.
+labels: [moderacao, blocklist]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ **Este canal é público e não é anônimo.** O canal principal e anônimo de denúncia é a própria **extensão**.
+        Use este formulário apenas se preferir denunciar de forma aberta. Toda denúncia passa por **moderação humana** antes de qualquer bloqueio — nada é bloqueado automaticamente. **Não** inclua dados pessoais, seus ou de terceiros.
+  - type: input
+    id: dominio
+    attributes:
+      label: Domínio
+      description: Apenas o domínio, sem dados de conta nem links com identificadores pessoais.
+      placeholder: "exemplo-de-bet.com"
+    validations:
+      required: true
+  - type: dropdown
+    id: categoria
+    attributes:
+      label: Categoria
+      options:
+        - Casa de aposta / bet
+        - Cassino online
+        - Slot / "tigrinho"
+        - Afiliado / redirecionador
+        - Não sei
+    validations:
+      required: true
+  - type: textarea
+    id: evidencia
+    attributes:
+      label: Por que se enquadra?
+      description: Qual sinal indica que é um domínio de aposta? (sem dados pessoais)
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmacoes
+    attributes:
+      label: Confirmações
+      options:
+        - label: Entendo que a denúncia passa por moderação humana antes de qualquer bloqueio.
+          required: true
+        - label: Não incluí dados pessoais meus ou de terceiros.
+          required: true

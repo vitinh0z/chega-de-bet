@@ -1,0 +1,34 @@
+name: ✨ Feature / melhoria
+description: Sugerir uma funcionalidade ou melhoria.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problema
+    attributes:
+      label: Problema / motivação
+      description: Que problema isso resolve? Por que é importante?
+    validations:
+      required: true
+  - type: textarea
+    id: proposta
+    attributes:
+      label: Solução proposta
+    validations:
+      required: true
+  - type: textarea
+    id: alternativas
+    attributes:
+      label: Alternativas consideradas
+  - type: dropdown
+    id: componente
+    attributes:
+      label: Componente
+      options:
+        - Extensão (cliente)
+        - Backend / API
+        - Blocklist / moderação
+        - Documentação
+        - Infra / CI
+        - Outro
+    validations:
+      required: true

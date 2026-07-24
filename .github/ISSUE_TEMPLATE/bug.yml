@@ -1,0 +1,55 @@
+name: 🐛 Bug
+description: Relatar um comportamento incorreto (extensão, backend ou documentação).
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por relatar. Preencha os campos abaixo para ajudar a reproduzir o problema.
+  - type: textarea
+    id: descricao
+    attributes:
+      label: Descrição do bug
+      description: O que aconteceu?
+    validations:
+      required: true
+  - type: textarea
+    id: reproducao
+    attributes:
+      label: Passos para reproduzir
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: esperado
+    attributes:
+      label: Comportamento esperado
+    validations:
+      required: true
+  - type: dropdown
+    id: componente
+    attributes:
+      label: Componente
+      options:
+        - Extensão (cliente)
+        - Backend / API
+        - Documentação
+        - Outro / não sei
+    validations:
+      required: true
+  - type: input
+    id: ambiente
+    attributes:
+      label: Ambiente
+      description: Navegador + versão, ou versão do backend / SO, conforme o caso.
+      placeholder: "Ex.: Chrome 120 / Windows 11"
+  - type: checkboxes
+    id: privacidade
+    attributes:
+      label: Privacidade
+      options:
+        - label: Confirmo que não incluí dados pessoais ou sensíveis neste relatório.
+          required: true
