@@ -35,4 +35,9 @@ public class Denuncia {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "dominio_id", nullable = false)
     private Dominio dominio;
+
+    // Pseudônimo anônimo de quem denunciou: hash do token efêmero no momento da denúncia.
+    // NUNCA é dado pessoal — valor opaco, usado só para contar denunciantes distintos (anti-sabotagem).
+    @Column(name = "denunciante_hash", nullable = false, length = 64)
+    private String denuncianteHash;
 }
