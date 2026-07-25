@@ -6,9 +6,13 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Optional;
 import java.util.UUID;
 
 public interface DenunciaRepository extends JpaRepository<Denuncia, UUID> {
+
+    // Dedup: mesmo denunciante (pseudônimo) já denunciou esse domínio antes?
+    Optional<Denuncia> findByDominioAndDenuncianteHash(Dominio dominio, String denuncianteHash);
 
     // Total de denúncias do domínio (todas as linhas, com repetição).
     long countByDominio(Dominio dominio);
