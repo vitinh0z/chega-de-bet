@@ -5,5 +5,12 @@ package com.chegadebet.service;
 //   - Aprovar: muda status para APROVADO e dispara commit na blocklist
 //   - Rejeitar: registra motivo
 //   - Aplicar quórum (2+) para domínios sensíveis (allowlist de proteção)
+
+import org.springframework.stereotype.Service;
+
+@Service
 public class ModeracaoService {
+
+
+
 }
