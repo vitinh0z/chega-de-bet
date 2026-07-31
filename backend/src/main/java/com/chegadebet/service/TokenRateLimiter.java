@@ -8,6 +8,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -52,9 +53,13 @@ public class TokenRateLimiter {
     private final Counter recusasPorOrigem;
     private final Counter recusasPorTeto;
 
-    public TokenRateLimiter(TokenProperties properties, TokenService tokenService, MeterRegistry meterRegistry) {
+    public TokenRateLimiter(TokenProperties properties,
+                            TokenService tokenService,
+                            MeterRegistry meterRegistry,
+                            @Value("${server.forward-headers-strategy:none}") String estrategiaDeEncaminhamento) {
         this.config = properties.rateLimit();
         this.tokenService = tokenService;
+        anunciarOrigemUsada(estrategiaDeEncaminhamento);
 
         // Dois motivos bem diferentes de recusa, separados por rótulo: "origem" é o limite
         // funcionando; "teto" é a memória no limite e merece alarme. Nenhum rótulo
@@ -62,6 +67,26 @@ public class TokenRateLimiter {
         this.recusasPorOrigem = recusas(meterRegistry, "origem");
         this.recusasPorTeto = recusas(meterRegistry, "teto");
         meterRegistry.gauge("chegadebet.token.rate_limit.origens", baldes, Map::size);
+    }
+
+    /**
+     * Diz na subida de onde vem o endereço que separa os baldes.
+     * <p>
+     * Existe porque a falha aqui é silenciosa: com um proxy reverso na frente e nenhuma
+     * configuração de encaminhamento, {@code getRemoteAddr()} devolve sempre o IP do
+     * proxy, todo mundo cai em um balde só e a emissão de token morre para todos — sem
+     * erro nenhum no log. Esta linha faz o modo efetivo aparecer no Loki desde o start.
+     */
+    private static void anunciarOrigemUsada(String estrategia) {
+        if ("none".equalsIgnoreCase(estrategia)) {
+            log.info("Rate-limit separando por endereço direto do peer "
+                    + "(server.forward-headers-strategy=none). Se houver proxy reverso na frente, "
+                    + "TODAS as requisições caem em um balde só — ver o javadoc do TokenController.");
+        } else {
+            log.info("Rate-limit separando por endereço encaminhado "
+                    + "(server.forward-headers-strategy={}). O proxy precisa SOBRESCREVER "
+                    + "X-Forwarded-For, e a lista de proxies confiáveis precisa ser estreita.", estrategia);
+        }
     }
 
     private static Counter recusas(MeterRegistry meterRegistry, String motivo) {

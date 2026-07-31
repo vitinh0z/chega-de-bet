@@ -20,11 +20,17 @@ import org.springframework.web.bind.annotation.RestController;
  * O limite usa {@code getRemoteAddr()}, que hoje é o endereço real porque a aplicação
  * atende direto na 8080. Assim que entrar nginx, Traefik ou um balanceador, esse valor
  * passa a ser o <b>IP do proxy</b> — e aí o mundo inteiro cai em um balde só, derrubando
- * a emissão de token para todo mundo. No mesmo commit em que o proxy subir:
+ * a emissão de token para todo mundo, sem erro nenhum no log. O bloco pronto para
+ * descomentar está em {@code application-prod.yml}. Em resumo:
  * <ol>
- *   <li>configure {@code server.forward-headers-strategy: framework};</li>
- *   <li>garanta que o proxy <b>sobrescreve</b> {@code X-Forwarded-For} em vez de
- *       repassar o que o cliente mandou.</li>
+ *   <li>{@code server.forward-headers-strategy: native}, que usa o {@code RemoteIpValve}
+ *       do Tomcat — e <b>não</b> {@code framework}, que aceita o cabeçalho venha de onde
+ *       vier, sem lista de proxies confiáveis;</li>
+ *   <li>{@code server.tomcat.remoteip.internal-proxies} estreitado ao IP do proxy. O
+ *       padrão do Tomcat confia em toda faixa privada, o que deixa qualquer vizinho de
+ *       rede interna forjar a origem;</li>
+ *   <li>o proxy precisa <b>sobrescrever</b> {@code X-Forwarded-For}, não acrescentar ao
+ *       que o cliente mandou.</li>
  * </ol>
  * Ler o cabeçalho na mão, sem proxy confiável na frente, seria pior que não ter limite:
  * qualquer um trocaria de "origem" a cada requisição e passaria direto.

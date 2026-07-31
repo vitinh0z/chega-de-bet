@@ -34,7 +34,7 @@ class TokenRateLimiterTest {
                 new TokenProperties.RateLimit(capacidade, Duration.ofHours(1), maxChaves));
         // TokenService real: é dele que sai o hash usado como chave do balde.
         TokenService tokenService = new TokenService(tokenRepository, properties);
-        return new TokenRateLimiter(properties, tokenService, new SimpleMeterRegistry());
+        return new TokenRateLimiter(properties, tokenService, new SimpleMeterRegistry(), "none");
     }
 
     @Test
@@ -118,7 +118,7 @@ class TokenRateLimiterTest {
                 // Janela de 1ms: o refill greedy repõe o balde quase imediatamente.
                 new TokenProperties.RateLimit(1, Duration.ofMillis(1), 100));
         TokenRateLimiter limiter = new TokenRateLimiter(
-                properties, new TokenService(tokenRepository, properties), new SimpleMeterRegistry());
+                properties, new TokenService(tokenRepository, properties), new SimpleMeterRegistry(), "none");
 
         limiter.registrarEmissao(ORIGEM);
 
