@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -21,4 +22,10 @@ public interface DenunciaRepository extends JpaRepository<Denuncia, UUID> {
     // anônimos diferentes, não o total bruto de denúncias.
     @Query("select count(distinct d.denuncianteHash) from Denuncia d where d.dominio = :dominio")
     long countDenunciantesDistintos(@Param("dominio") Dominio dominio);
+
+    // Recorte temporal do sinal: 50 denúncias de três anos atrás não são mais urgentes
+    // que 10 desta semana. Também mede o que entrou depois de uma rejeição.
+    @Query("select count(distinct d.denuncianteHash) from Denuncia d " +
+           "where d.dominio = :dominio and d.criadoEm >= :desde")
+    long countDenunciantesDistintosDesde(@Param("dominio") Dominio dominio, @Param("desde") Instant desde);
 }
