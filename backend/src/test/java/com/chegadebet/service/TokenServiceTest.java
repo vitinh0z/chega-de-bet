@@ -35,7 +35,9 @@ class TokenServiceTest {
 
     @BeforeEach
     void setUp() {
-        tokenService = new TokenService(tokenRepository, new TokenProperties(Duration.ofHours(24)));
+        tokenService = new TokenService(tokenRepository, new TokenProperties(
+                Duration.ofHours(24),
+                new TokenProperties.RateLimit(30, Duration.ofHours(1), 100_000)));
     }
 
     private void devolveOQueFoiSalvo() {
