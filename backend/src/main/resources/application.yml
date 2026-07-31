@@ -42,3 +42,10 @@ management:
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
+
+# Regras do domínio
+chegadebet:
+  token:
+    # Validade do token efêmero (ISO-8601). Encurtar é resposta a incidente:
+    # por isso vive aqui e não numa constante compilada.
+    ttl: PT24H
