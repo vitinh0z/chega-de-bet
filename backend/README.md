@@ -71,8 +71,8 @@ make run        # perfil dev
 |---|---|
 | API | http://localhost:8080 |
 | Swagger UI | http://localhost:8080/swagger-ui.html |
-| Actuator / health | http://localhost:8080/actuator/health |
-| Métricas Prometheus (app) | http://localhost:8080/actuator/prometheus |
+| Actuator / health | http://localhost:8081/actuator/health |
+| Métricas Prometheus (app) | http://localhost:8081/actuator/prometheus |
 | Grafana | http://localhost:3000 (admin/admin) |
 | Prometheus | http://localhost:9090 |
 | Loki | http://localhost:3100 |
@@ -80,7 +80,7 @@ make run        # perfil dev
 
 ## Observabilidade
 
-- **Métricas:** o Actuator expõe `/actuator/prometheus`; o Prometheus faz scrape e o Grafana lê via datasource já provisionado.
+- **Métricas:** o Actuator expõe `/actuator/prometheus` na porta de gestão **8081**, que o `docker-compose` não publica — as métricas não ficam abertas na internet. O Prometheus faz scrape por dentro da rede (`app:8081`) e o Grafana lê via datasource já provisionado.
 - **Logs:** em `prod`, a app emite log JSON estruturado; o **Grafana Alloy** lê os logs dos contêineres e envia ao **Loki** (substitui o Promtail, descontinuado). O dashboard "Chega de Bet — Visão Geral" já vem provisionado com um painel de logs.
 
 ## Nota sobre o Maven Wrapper
