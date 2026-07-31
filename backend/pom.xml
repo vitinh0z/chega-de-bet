@@ -38,6 +38,14 @@
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
 
+        <!-- Segurança: autentica o painel de moderação.
+             Entrar no classpath protege TODAS as rotas por padrão, então os endpoints
+             anônimos (denúncia, token) são liberados explicitamente em SecurityConfig. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
         <!-- Validação (Bean Validation) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
