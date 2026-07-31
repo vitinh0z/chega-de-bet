@@ -50,6 +50,15 @@ chegadebet:
     # por isso vive aqui e não numa constante compilada.
     ttl: PT24H
 
+    # Limite de emissão por origem. Folgado de propósito: com CGNAT de operadora
+    # móvel muita gente compartilha um IP, e bloquear denunciante real é o erro caro.
+    # Um uso normal gasta 1 token por dia, então 30/h só incomoda quem automatiza.
+    rate-limit:
+      capacidade: 30
+      janela: PT1H
+      # Teto de origens acompanhadas ao mesmo tempo (~100k baldes ≈ poucos MB).
+      max-chaves: 100000
+
   moderacao:
     # Moderadores DISTINTOS necessários para aprovar um domínio da allowlist.
     quorum-minimo: 2

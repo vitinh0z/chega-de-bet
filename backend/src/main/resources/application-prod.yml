@@ -2,6 +2,40 @@ spring:
   jpa:
     show-sql: false
 
+# ============================================================================
+# AO COLOCAR UM PROXY REVERSO (nginx, Traefik, balanceador) NA FRENTE DA APP:
+# descomente o bloco abaixo NO MESMO commit que subir o proxy.
+#
+# Hoje a app atende direto na 8080, então getRemoteAddr() já é o IP real do
+# cliente e o rate-limit de /api/tokens separa as origens corretamente.
+# Com um proxy na frente e este bloco comentado, getRemoteAddr() passa a ser o
+# IP do proxy: todo mundo cai em um balde só e a emissão de token para para
+# todos os usuários, sem erro nenhum no log. O TokenRateLimiter registra na
+# subida qual modo está em vigor — é por lá que dá para conferir.
+#
+# Por que não deixar isto ligado desde já: sem proxy confiável na frente,
+# confiar em X-Forwarded-For é PIOR que não ter limite, porque qualquer um
+# troca de "origem" a cada requisição e passa direto.
+# ============================================================================
+#server:
+#  # 'native' usa o RemoteIpValve do Tomcat, que só aceita o cabeçalho quando a
+#  # conexão vem de um proxy confiável. É o que dá resistência a spoofing.
+#  forward-headers-strategy: native
+#  tomcat:
+#    remoteip:
+#      remote-ip-header: x-forwarded-for
+#      protocol-header: x-forwarded-proto
+#      # ESTREITE para o(s) IP(s) do seu proxy. O padrão do Tomcat confia em
+#      # TODA faixa privada (10/8, 172.16/12, 192.168/16), o que basta para
+#      # qualquer vizinho na rede interna forjar a origem e furar o limite.
+#      internal-proxies: "10\\.0\\.0\\.5"
+#
+# Do lado do proxy, o cabeçalho precisa ser SOBRESCRITO, não acrescentado.
+# nginx:
+#   proxy_set_header X-Forwarded-For $remote_addr;      # sobrescreve
+#   proxy_set_header X-Forwarded-Proto $scheme;
+# Usar $proxy_add_x_forwarded_for aqui anexaria o que o cliente mandou.
+
 # Logs estruturados em JSON (formato Logstash) para ingestão pelo Loki
 logging:
   structured:

@@ -22,6 +22,7 @@
         <springdoc.version>3.0.3</springdoc.version>
         <mapstruct.version>1.6.3</mapstruct.version>
         <lombok-mapstruct-binding.version>0.2.0</lombok-mapstruct-binding.version>
+        <bucket4j.version>8.10.1</bucket4j.version>
     </properties>
 
     <dependencies>
@@ -81,6 +82,16 @@
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>${springdoc.version}</version>
+        </dependency>
+
+        <!-- Rate-limit (token bucket).
+             Só o core: os módulos de cluster (Redis, Hazelcast, Ignite) trariam
+             infraestrutura que o projeto ainda não precisa. Os baldes vivem no heap
+             desta instância — ver TokenRateLimiter para a consequência disso ao escalar. -->
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j-core</artifactId>
+            <version>${bucket4j.version}</version>
         </dependency>
 
         <!-- MapStruct (mapeamento entidade <-> DTO) -->

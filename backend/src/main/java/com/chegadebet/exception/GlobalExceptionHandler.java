@@ -61,6 +61,22 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     /**
+     * Origem estourou o limite da janela -> 429, com Retry-After em segundos.
+     * <p>
+     * A mensagem não diz quanto restou nem qual é o limite: o cliente legítimo só precisa
+     * saber quando tentar de novo.
+     */
+    @ExceptionHandler(LimiteExcedidoException.class)
+    public ResponseEntity<ErroResponse> handleLimiteExcedido(LimiteExcedidoException ex, WebRequest request) {
+        // Arredonda para cima e nunca devolve 0: "tente de novo em 0 segundos" convida
+        // o cliente a repetir na hora e a levar outro 429.
+        long segundos = Math.max(1, (long) Math.ceil(ex.getEsperar().toMillis() / 1000.0));
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(segundos))
+                .body(erro(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), request));
+    }
+
+    /**
      * Rede de segurança para o que não foi tratado acima: a causa vai para o log
      * (e daí para o Loki) e o cliente recebe apenas uma mensagem genérica.
      */
