@@ -1,91 +1,87 @@
 package com.chegadebet.service;
 
-import com.chegadebet.domain.enums.StatusDominio;
-import com.chegadebet.domain.model.Denuncia;
 import com.chegadebet.domain.model.Dominio;
-import com.chegadebet.domain.model.TokenEfemero;
 import com.chegadebet.exception.RecursoNaoEncontradoException;
-import com.chegadebet.mapper.DenunciaMapper;
-import com.chegadebet.repository.DenunciaRepository;
+import com.chegadebet.mapper.DominioMapper;
 import com.chegadebet.repository.DominioRepository;
-import com.chegadebet.repository.TokenRepository;
 import com.chegadebet.web.dto.DenunciaRequest;
 import com.chegadebet.web.dto.DenunciaResponse;
+import com.chegadebet.web.dto.DominioResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.time.Instant;
-import java.util.HexFormat;
+import java.util.Locale;
 
+/**
+ * Porta de entrada da denúncia anônima.
+ * <p>
+ * O registro em si vive em {@link RegistroDenuncia}, que é a transação. Esta classe cuida
+ * do que precisa acontecer <b>fora</b> dela: a recuperação da corrida entre duas
+ * requisições simultâneas.
+ */
 @Service
 public class DenunciaService {
 
-    private final DenunciaRepository denunciaRepository;
+    private static final Logger log = LoggerFactory.getLogger(DenunciaService.class);
+
+    private final RegistroDenuncia registroDenuncia;
     private final DominioRepository dominioRepository;
-    private final TokenRepository tokenRepository;
-    private final DenunciaMapper denunciaMapper;
+    private final DominioMapper dominioMapper;
 
-    public DenunciaService(DenunciaRepository denunciaRepository,
-                            DominioRepository dominioRepository,
-                            TokenRepository tokenRepository,
-                            DenunciaMapper denunciaMapper) {
-        this.denunciaRepository = denunciaRepository;
+    public DenunciaService(RegistroDenuncia registroDenuncia,
+                           DominioRepository dominioRepository,
+                           DominioMapper dominioMapper) {
+        this.registroDenuncia = registroDenuncia;
         this.dominioRepository = dominioRepository;
-        this.tokenRepository = tokenRepository;
-        this.denunciaMapper = denunciaMapper;
+        this.dominioMapper = dominioMapper;
     }
 
-    @Transactional
+    /**
+     * Registra uma denúncia anônima. Quem denuncia só prova que tem um token efêmero
+     * válido — nenhum dado da pessoa entra aqui.
+     *
+     * @throws RecursoNaoEncontradoException se o token não existir ou já tiver expirado
+     */
     public DenunciaResponse registrar(DenunciaRequest request) {
-        String denuncianteHash = sha256Hex(request.token());
-        validarToken(denuncianteHash);
-
-        Dominio dominio = dominioRepository.findByHost(request.host())
-                .orElseGet(() -> criarDominio(request.host()));
-
-        Denuncia existente = denunciaRepository.findByDominioAndDenuncianteHash(dominio, denuncianteHash)
-                .orElse(null);
-        if (existente != null) {
-            return denunciaMapper.toResponse(existente);
-        }
-
-        Denuncia denuncia = denunciaMapper.toEntity(request);
-        denuncia.setDominio(dominio);
-        denuncia.setDenuncianteHash(denuncianteHash);
-
-        Denuncia salva = denunciaRepository.save(denuncia);
-        return denunciaMapper.toResponse(salva);
-    }
-
-    private void validarToken(String denuncianteHash) {
-        TokenEfemero token = tokenRepository.findByValorHash(denuncianteHash)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Token inválido ou expirado."));
-        if (token.getExpiraEm().isBefore(Instant.now())) {
-            throw new RecursoNaoEncontradoException("Token inválido ou expirado.");
-        }
-    }
-
-    // Domínio novo NASCE em EM_ANALISE — aprovação/rejeição é sempre decisão humana.
-    private Dominio criarDominio(String host) {
-        Dominio dominio = new Dominio();
-        dominio.setHost(host);
-        dominio.setStatus(StatusDominio.EM_ANALISE);
-        dominio.setScore(0);
-        return dominioRepository.save(dominio);
-    }
-
-    // Mesmo algoritmo usado para gravar TokenEfemero.valorHash: o token nunca é
-    // guardado em claro, só o seu hash — tanto para validar quanto para pseudonimizar.
-    private String sha256Hex(String valor) {
         try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(valor.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 não disponível", e);
+            return registroDenuncia.executar(request);
+        } catch (DataIntegrityViolationException e) {
+            // Corrida perdida: outra requisição simultânea gravou o mesmo host novo ou a
+            // mesma denúncia primeiro, e um dos índices únicos rejeitou esta. A transação
+            // anterior foi desfeita inteira, então refazer agora encontra o que a outra
+            // gravou e devolve o mesmo resultado, em vez de um 500 na cara de quem
+            // denunciou. Uma tentativa basta: na segunda passagem a linha já existe.
+            log.debug("Corrida no registro de denúncia; refazendo sobre o que a outra requisição gravou");
+            return registroDenuncia.executar(request);
         }
+    }
+
+    /**
+     * Consulta pública do status de um domínio. Só lê: quem chama informa o host e
+     * recebe o que o banco já sabe sobre ele.
+     *
+     * @throws RecursoNaoEncontradoException se o host nunca foi denunciado
+     */
+    @Transactional(readOnly = true)
+    public DominioResponse consultarPorHost(String host) {
+        Dominio dominio = dominioRepository.findByHost(normalizarHost(host))
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Domínio não encontrado: " + host));
+        return dominioMapper.toResponse(dominio);
+    }
+
+    /**
+     * Normaliza o host na entrada de todo caminho que consulta {@code findByHost}.
+     * <p>
+     * Sem isto, {@code Exemplo.com} e {@code exemplo.com} viram dois domínios diferentes,
+     * com duas filas de moderação e dois scores — e um pode ser aprovado enquanto o outro
+     * não. {@link Locale#ROOT} é obrigatório: {@code toLowerCase()} sem locale usa o da
+     * JVM, e em turco o {@code I} vira {@code ı} (i sem ponto), então {@code INDIA.com}
+     * viraria {@code ındia.com} e nunca casaria com o registro salvo.
+     */
+    static String normalizarHost(String host) {
+        return host.trim().toLowerCase(Locale.ROOT);
     }
 }
