@@ -52,6 +52,14 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 .body(erro(HttpStatus.NOT_FOUND, mensagem, request));
     }
 
+    /** Operação incompatível com o estado atual do recurso -> 409. */
+    @ExceptionHandler(EstadoInvalidoException.class)
+    public ResponseEntity<ErroResponse> handleEstadoInvalido(EstadoInvalidoException ex, WebRequest request) {
+        String mensagem = (ex.getMessage() != null) ? ex.getMessage() : "Operação inválida para o estado atual";
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(erro(HttpStatus.CONFLICT, mensagem, request));
+    }
+
     /**
      * Rede de segurança para o que não foi tratado acima: a causa vai para o log
      * (e daí para o Loki) e o cliente recebe apenas uma mensagem genérica.

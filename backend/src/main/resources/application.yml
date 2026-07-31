@@ -49,3 +49,15 @@ chegadebet:
     # Validade do token efêmero (ISO-8601). Encurtar é resposta a incidente:
     # por isso vive aqui e não numa constante compilada.
     ttl: PT24H
+
+  moderacao:
+    # Moderadores DISTINTOS necessários para aprovar um domínio da allowlist.
+    quorum-minimo: 2
+    # Allowlist de proteção: bloquear por engano causa dano grave. Casa o host exato
+    # e os subdomínios (noticias.gov.br entra; malgov.br não).
+    allowlist:
+      - gov.br
+      - jus.br
+      - jogadoresanonimos.org.br
+    # Denunciantes distintos NOVOS, após a última rejeição, que devolvem o domínio à fila.
+    limiar-reabertura: 5
