@@ -3,11 +3,13 @@ global:
   evaluation_interval: 15s
 
 scrape_configs:
-  # Métricas expostas pelo Actuator/Micrometer da aplicação
+  # Métricas expostas pelo Actuator/Micrometer da aplicação.
+  # 8081 é a porta de gestão (management.server.port), acessível só na rede interna
+  # do compose — a 8080, publicada, não serve mais o Actuator.
   - job_name: chega-de-bet-backend
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ["app:8080"]
+      - targets: ["app:8081"]
 
   # Auto-monitoramento do Prometheus
   - job_name: prometheus

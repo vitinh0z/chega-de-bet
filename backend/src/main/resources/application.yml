@@ -22,6 +22,11 @@ spring:
 
 # Actuator / observabilidade
 management:
+  server:
+    # Porta separada, que o docker-compose NÃO publica: o Actuator passa a ser
+    # alcançável só de dentro da rede interna (Prometheus), e não pela internet.
+    # Antes disso, /actuator/prometheus respondia na mesma 8080 exposta ao mundo.
+    port: 8081
   endpoints:
     web:
       exposure:

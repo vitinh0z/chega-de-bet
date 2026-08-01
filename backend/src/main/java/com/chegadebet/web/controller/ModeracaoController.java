@@ -8,11 +8,11 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -21,16 +21,14 @@ import java.util.UUID;
 
 /**
  * Endpoints do painel de moderação.
- *
- * <h2>Atenção: estes endpoints estão abertos</h2>
- * O projeto ainda não tem Spring Security no {@code pom.xml}. Qualquer um que alcance a
- * API consegue aprovar ou rejeitar domínio. Antes de subir isto em ambiente exposto:
- * <ol>
- *   <li>Adicione {@code spring-boot-starter-security}.</li>
- *   <li>Restrinja {@code /api/moderacao/**} a quem tem papel de moderador.</li>
- *   <li>Troque o header {@code X-Moderador} pela identidade autenticada de verdade —
- *       hoje ele é declarado pelo cliente, então não prova nada e o quórum é burlável.</li>
- * </ol>
+ * <p>
+ * Exigem autenticação: {@code /api/moderacao/**} é restrito a quem tem
+ * {@code ROLE_MODERADOR} (ver {@code SecurityConfig}). A identidade de quem decidiu vem
+ * do {@link Authentication}, nunca de um cabeçalho.
+ * <p>
+ * Isso não é formalidade: o quórum conta moderadores <b>distintos</b>. Enquanto o nome
+ * vinha do cabeçalho {@code X-Moderador}, declarado pelo cliente, uma pessoa só formava
+ * quórum sozinha mandando dois nomes diferentes — a proteção da allowlist era decorativa.
  */
 @RestController
 @RequestMapping("/api/moderacao")
@@ -61,8 +59,8 @@ public class ModeracaoController {
      */
     @PostMapping(path = "/dominios/{dominioId}/aprovacao", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<DominioResponse> aprovar(@PathVariable UUID dominioId,
-                                                   @RequestHeader("X-Moderador") String moderador) {
-        DominioResponse response = moderacaoService.aprovar(dominioId, moderador);
+                                                   Authentication moderador) {
+        DominioResponse response = moderacaoService.aprovar(dominioId, moderador.getName());
         HttpStatus status = (response.status() == StatusDominio.EM_ANALISE)
                 ? HttpStatus.ACCEPTED
                 : HttpStatus.OK;
@@ -76,8 +74,8 @@ public class ModeracaoController {
      */
     @PostMapping(path = "/dominios/{dominioId}/rejeicao", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<DominioResponse> rejeitar(@PathVariable UUID dominioId,
-                                                    @RequestHeader("X-Moderador") String moderador,
+                                                    Authentication moderador,
                                                     @Valid @RequestBody RejeicaoRequest request) {
-        return ResponseEntity.ok(moderacaoService.rejeitar(dominioId, moderador, request.motivo()));
+        return ResponseEntity.ok(moderacaoService.rejeitar(dominioId, moderador.getName(), request.motivo()));
     }
 }
