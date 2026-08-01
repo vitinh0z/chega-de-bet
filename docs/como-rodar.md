@@ -124,3 +124,5 @@ make test
 ## Mais detalhes
 
 Para a stack completa, a estrutura de pastas do backend e as notas de observabilidade, veja [backend/README.md](../backend/README.md).
+
+Para como a imagem chega até a VM de produção, veja [Deploy](deploy.md).
