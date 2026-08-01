@@ -80,7 +80,27 @@ make run        # perfil dev
 
 ## Observabilidade
 
-- **Métricas:** o Actuator expõe `/actuator/prometheus` na porta de gestão **8081**, que o `docker-compose` não publica — as métricas não ficam abertas na internet. O Prometheus faz scrape por dentro da rede (`app:8081`) e o Grafana lê via datasource já provisionado.
+A observabilidade tem **duas montagens**, e o compose base é a de produção:
+
+| | Comando | O que sobe |
+|---|---|---|
+| **VM (Fase 1)** | `make up-prod` | app + postgres + **alloy** → Grafana Cloud |
+| **Dev / self-hosted** | `make up` | o de cima **+** Prometheus, Loki e Grafana locais |
+
+Prometheus, Loki e Grafana juntos consomem mais RAM que o próprio backend em idle, o que
+anulava o ganho de caber no free tier ao lado do Postgres. Na VM fica só o **Alloy**
+(~30-50 MB), que faz scrape das métricas e lê os logs dos contêineres, mandando tudo por
+`remote_write` para o Grafana Cloud — nada é armazenado na VM.
+
+O que separa as duas montagens é qual arquivo o Alloy monta:
+`observability/alloy/config.alloy` (nuvem) ou `config.local.alloy` (Loki local). O
+overlay `docker-compose.observability.yml` troca um pelo outro.
+
+Para a VM, copie `.env.example` para `.env` e preencha as credenciais do Grafana Cloud.
+`make up-prod` recusa subir sem elas: o Alloy sobe normalmente com a URL vazia e
+simplesmente não envia nada, então a falha seria silenciosa.
+
+- **Métricas:** o Actuator expõe `/actuator/prometheus` na porta de gestão **8081**, que o `docker-compose` não publica — as métricas não ficam abertas na internet. Quem faz o scrape é o Alloy (na VM) ou o Prometheus local (em dev), sempre por dentro da rede (`app:8081`).
 - **Logs:** em `prod`, a app emite log JSON estruturado; o **Grafana Alloy** lê os logs dos contêineres e envia ao **Loki** (substitui o Promtail, descontinuado). O dashboard "Chega de Bet — Visão Geral" já vem provisionado com um painel de logs.
 
 ## Nota sobre o Maven Wrapper
