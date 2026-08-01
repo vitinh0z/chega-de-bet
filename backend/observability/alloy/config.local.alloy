@@ -1,0 +1,37 @@
+// Coleta do ambiente de desenvolvimento: tudo fica na máquina, nada sai para a nuvem.
+//
+// Usado pelo docker-compose.observability.yml, que monta este arquivo no lugar do
+// config.alloy (o de produção, que faz remote_write para o Grafana Cloud).
+//
+// Aqui não há prometheus.scrape: no ambiente completo quem faz o scrape da aplicação é
+// o Prometheus local, configurado em observability/prometheus/prometheus.yml.
+
+// Descobre os contêineres Docker em execução
+discovery.docker "containers" {
+	host = "unix:///var/run/docker.sock"
+}
+
+// Extrai o nome do contêiner como label "container"
+discovery.relabel "containers" {
+	targets = discovery.docker.containers.targets
+
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/(.*)"
+		target_label  = "container"
+	}
+}
+
+// Lê os logs (stdout/stderr) dos contêineres e encaminha ao Loki
+loki.source.docker "containers" {
+	host       = "unix:///var/run/docker.sock"
+	targets    = discovery.relabel.containers.output
+	forward_to = [loki.write.local.receiver]
+}
+
+// Escreve no Loki local
+loki.write "local" {
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
+	}
+}

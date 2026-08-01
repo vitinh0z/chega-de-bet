@@ -1,9 +1,58 @@
-// Descobre os contêineres Docker em execução
+// Coleta da VM de produção: nada é armazenado aqui, tudo vai para o Grafana Cloud.
+//
+// Este é o único agente de observabilidade que roda na VM. Prometheus, Loki e Grafana
+// locais consumiam mais RAM que o próprio backend em idle, o que anulava o ganho de
+// caber no free tier junto com o Postgres. Para subir a stack completa localmente,
+// use o docker-compose.observability.yml, que troca este arquivo pelo config.local.alloy.
+
+// ============================ MÉTRICAS ============================
+// Sem o Prometheus local, é o Alloy que faz o scrape da aplicação.
+
+prometheus.scrape "backend" {
+	targets = [{
+		__address__ = "app:8081",
+		job         = "chega-de-bet-backend",
+	}]
+
+	// 8081 é a porta de gestão (management.server.port), que o compose não publica.
+	metrics_path    = "/actuator/prometheus"
+	scrape_interval = "60s"
+	forward_to      = [prometheus.relabel.enxuga.receiver]
+}
+
+// O free tier dá 10 mil séries ativas, e o Micrometer é generoso: JVM, HTTP, Hikari e
+// Tomcat somados passam fácil do que interessa. Aqui saem as famílias de menor valor
+// diagnóstico. Se o consumo chegar perto do teto, o próximo corte natural são os
+// histogramas de http_server_requests por uri.
+prometheus.relabel "enxuga" {
+	forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+
+	rule {
+		source_labels = ["__name__"]
+		regex         = "jvm_buffer_.*|jvm_gc_pause_seconds_max|tomcat_.*|hikaricp_connections_(creation|acquire|usage)_seconds_max"
+		action        = "drop"
+	}
+}
+
+prometheus.remote_write "grafana_cloud" {
+	endpoint {
+		url = sys.env("GRAFANA_CLOUD_PROM_URL")
+
+		basic_auth {
+			// O usuário de métricas é numérico e DIFERENTE do de logs. Trocar os dois
+			// dá 401, e o sintoma aparece só no log do Alloy.
+			username = sys.env("GRAFANA_CLOUD_PROM_USER")
+			password = sys.env("GRAFANA_CLOUD_TOKEN")
+		}
+	}
+}
+
+// ============================== LOGS ==============================
+
 discovery.docker "containers" {
 	host = "unix:///var/run/docker.sock"
 }
 
-// Extrai o nome do contêiner como label "container"
 discovery.relabel "containers" {
 	targets = discovery.docker.containers.targets
 
@@ -14,16 +63,19 @@ discovery.relabel "containers" {
 	}
 }
 
-// Lê os logs (stdout/stderr) dos contêineres e encaminha ao Loki
 loki.source.docker "containers" {
 	host       = "unix:///var/run/docker.sock"
 	targets    = discovery.relabel.containers.output
-	forward_to = [loki.write.default.receiver]
+	forward_to = [loki.write.grafana_cloud.receiver]
 }
 
-// Escreve no Loki
-loki.write "default" {
+loki.write "grafana_cloud" {
 	endpoint {
-		url = "http://loki:3100/loki/api/v1/push"
+		url = sys.env("GRAFANA_CLOUD_LOKI_URL")
+
+		basic_auth {
+			username = sys.env("GRAFANA_CLOUD_LOKI_USER")
+			password = sys.env("GRAFANA_CLOUD_TOKEN")
+		}
 	}
 }
