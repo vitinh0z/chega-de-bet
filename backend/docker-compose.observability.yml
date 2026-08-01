@@ -1,0 +1,66 @@
+# Overlay de OBSERVABILIDADE LOCAL: soma Prometheus, Loki e Grafana ao compose base.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+#   # ou, mais curto: make up
+#
+# É a stack completa self-hosted, para desenvolver sem depender do Grafana Cloud e para
+# quando o projeto crescer o bastante para justificar hospedar de novo. Na VM da Fase 1
+# ela não sobe: `docker compose up -d` sozinho traz só app + postgres + alloy.
+#
+# Tudo aqui roda em 127.0.0.1: nenhuma dessas portas deve ficar exposta.
+
+services:
+  # Em desenvolvimento o Alloy não fala com a nuvem: manda os logs para o Loki local, e
+  # quem faz o scrape das métricas é o Prometheus daqui. Trocar o arquivo montado é o
+  # que separa os dois comportamentos.
+  alloy:
+    volumes:
+      - ./observability/alloy/config.local.alloy:/etc/alloy/config.alloy:ro
+    depends_on:
+      - loki
+
+  # Métricas (scrape do /actuator/prometheus da aplicação)
+  prometheus:
+    image: prom/prometheus:v3.13.1
+    container_name: cdb-prometheus
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "127.0.0.1:9090:9090"
+    restart: unless-stopped
+
+  # Agregação de logs
+  loki:
+    image: grafana/loki:3.7.3
+    container_name: cdb-loki
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./observability/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki-data:/loki
+    ports:
+      - "127.0.0.1:3100:3100"
+    restart: unless-stopped
+
+  # Dashboards (datasources de Prometheus + Loki já provisionados)
+  grafana:
+    image: grafana/grafana:12.3.8
+    container_name: cdb-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      # admin/admin + login anônimo: mantido só no localhost
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - prometheus
+      - loki
+    restart: unless-stopped
+
+volumes:
+  grafana-data:
+  loki-data:
