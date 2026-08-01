@@ -2,7 +2,7 @@
 
 API de denúncia e moderação de domínios de aposta. Este diretório contém o **esqueleto** do serviço: estrutura, dependências e infra de observabilidade já configuradas, com as classes ainda **sem implementação** (marcadas com `TODO`).
 
-> Procurando o passo a passo para rodar o projeto pela primeira vez? Veja [docs/como-rodar.md](../docs/como-rodar.md).
+> Procurando o passo a passo para rodar o projeto pela primeira vez? Veja [docs/como-rodar.md](../docs/como-rodar.md). Procurando como a imagem chega até a VM de produção? Veja [docs/deploy.md](../docs/deploy.md).
 
 ## Stack
 

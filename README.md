@@ -53,6 +53,7 @@ Quando alguém tenta acessar um domínio bloqueado, a extensão mostra uma tela 
 - [Visão geral da ideia](docs/visao-geral.md) — o ciclo do projeto e os pilares, em diagramas.
 - [Arquitetura](docs/arquitetura.md) — a visão técnica de ponta a ponta (backend, frontend e cliente).
 - [Como rodar o projeto](docs/como-rodar.md) — passo a passo para subir o ambiente localmente.
+- [Deploy](docs/deploy.md) — como a imagem do backend é construída e como ela chega à VM de produção.
 - [Como contribuir](CONTRIBUTING.md) — denúncia de domínios, código, revisão e tradução.
 
 ## Comunidade
