@@ -1,3 +1,16 @@
+# Stack de PRODUÇÃO (Fase 1): só o que precisa rodar na VM.
+#
+#   docker compose up -d --build          # ou: make up-prod
+#
+# Prometheus, Loki e Grafana NÃO estão aqui de propósito. Juntos consomem mais RAM que
+# o próprio backend em idle, o que anulava o ganho de caber no free tier ao lado do
+# Postgres. Na VM fica só o Alloy (~30-50 MB), que envia métricas e logs para o
+# Grafana Cloud.
+#
+# Para a stack completa em desenvolvimento, some o overlay:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+#   # ou, mais curto: make up
 name: chega-de-bet
 
 services:
@@ -12,10 +25,16 @@ services:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      DB_URL: jdbc:postgresql://postgres:5432/chegadebet
-      DB_USERNAME: chegadebet
-      DB_PASSWORD: chegadebet
+      DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-chegadebet}
+      DB_USERNAME: ${DB_USERNAME:-chegadebet}
+      DB_PASSWORD: ${DB_PASSWORD:-chegadebet}
+      # Cria o primeiro moderador na subida, e só com a tabela vazia. Deixe em branco
+      # depois que a conta existir. Ver BootstrapModerador.
+      CHEGADEBET_MODERACAO_BOOTSTRAP_LOGIN: ${CHEGADEBET_MODERACAO_BOOTSTRAP_LOGIN:-}
+      CHEGADEBET_MODERACAO_BOOTSTRAP_SENHA: ${CHEGADEBET_MODERACAO_BOOTSTRAP_SENHA:-}
     ports:
+      # Só a porta da API. A 8081 (Actuator) fica sem publicar de propósito: as
+      # métricas são alcançáveis apenas de dentro desta rede, pelo Alloy.
       - "8080:8080"
     restart: unless-stopped
 
@@ -24,44 +43,24 @@ services:
     image: postgres:18.4
     container_name: cdb-postgres
     environment:
-      POSTGRES_DB: chegadebet
-      POSTGRES_USER: chegadebet
-      POSTGRES_PASSWORD: chegadebet
+      POSTGRES_DB: ${DB_NAME:-chegadebet}
+      POSTGRES_USER: ${DB_USERNAME:-chegadebet}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-chegadebet}
     ports:
       # Exposto apenas ao localhost: não fica acessível na LAN
       - "127.0.0.1:5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U chegadebet"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-chegadebet}"]
       interval: 10s
       timeout: 5s
       retries: 5
-
-  # ===================== Observabilidade =====================
-  # Métricas (scrape do /actuator/prometheus da aplicação)
-  prometheus:
-    image: prom/prometheus:v3.13.1
-    container_name: cdb-prometheus
-    volumes:
-      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-    ports:
-      - "127.0.0.1:9090:9090"
     restart: unless-stopped
 
-  # Agregação de logs
-  loki:
-    image: grafana/loki:3.7.3
-    container_name: cdb-loki
-    command: -config.file=/etc/loki/loki-config.yml
-    volumes:
-      - ./observability/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
-      - loki-data:/loki
-    ports:
-      - "127.0.0.1:3100:3100"
-    restart: unless-stopped
-
-  # Coleta os logs dos contêineres e envia ao Loki (substitui o Promtail, agora EOL)
+  # ===================== Coleta =====================
+  # Único agente de observabilidade da VM: faz scrape das métricas da app e lê os logs
+  # dos contêineres, mandando tudo para o Grafana Cloud. Não guarda nada localmente.
   alloy:
     image: grafana/alloy:v1.18.0
     container_name: cdb-alloy
@@ -69,36 +68,21 @@ services:
       - run
       - --server.http.listen-addr=0.0.0.0:12345
       - /etc/alloy/config.alloy
+    environment:
+      # Vêm do .env ao lado deste arquivo (git-ignorado). Ver .env.example.
+      # Os dois usuários são numéricos e DIFERENTES entre si.
+      GRAFANA_CLOUD_PROM_URL: ${GRAFANA_CLOUD_PROM_URL:-}
+      GRAFANA_CLOUD_PROM_USER: ${GRAFANA_CLOUD_PROM_USER:-}
+      GRAFANA_CLOUD_LOKI_URL: ${GRAFANA_CLOUD_LOKI_URL:-}
+      GRAFANA_CLOUD_LOKI_USER: ${GRAFANA_CLOUD_LOKI_USER:-}
+      GRAFANA_CLOUD_TOKEN: ${GRAFANA_CLOUD_TOKEN:-}
     volumes:
       - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     ports:
+      # UI de diagnóstico do Alloy, só no localhost da VM.
       - "127.0.0.1:12345:12345"
-    depends_on:
-      - loki
-    restart: unless-stopped
-
-  # Dashboards (datasources de Prometheus + Loki já provisionados)
-  grafana:
-    image: grafana/grafana:12.3.8
-    container_name: cdb-grafana
-    environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
-      GF_AUTH_ANONYMOUS_ENABLED: "true"
-    volumes:
-      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
-      - grafana-data:/var/lib/grafana
-    ports:
-      # admin/admin + login anônimo: mantido só no localhost
-      - "127.0.0.1:3000:3000"
-    depends_on:
-      - prometheus
-      - loki
     restart: unless-stopped
 
 volumes:
   postgres-data:
-  grafana-data:
-  loki-data:

@@ -43,7 +43,7 @@ flowchart TB
         CDN[("CDN<br/>blocklist assinada")]
     end
 
-    subgraph OBS["Observabilidade"]
+    subgraph OBS["Observabilidade (dev local)"]
         PROM["Prometheus"]
         ALLOY["Grafana Alloy"]
         LOKI["Loki"]
@@ -51,6 +51,12 @@ flowchart TB
         PROM --> GRAF
         ALLOY --> LOKI
         LOKI --> GRAF
+    end
+
+    subgraph OBSPROD["Observabilidade (VM, Fase 1)"]
+        ALLOYP["Grafana Alloy"]
+        CLOUD[("Grafana Cloud<br/>metricas + logs")]
+        ALLOYP -->|"remote_write"| CLOUD
     end
 
     SW -->|"baixa a lista assinada"| CDN
@@ -61,7 +67,14 @@ flowchart TB
     CDN -->|"atualiza"| SW
     API -.->|"/actuator/prometheus"| PROM
     API -.->|"logs JSON"| ALLOY
+    API -.->|"metricas + logs"| ALLOYP
 ```
+
+Na VM da Fase 1 roda **só o Alloy**: Prometheus, Loki e Grafana locais consumiam mais RAM
+que o próprio backend em idle, o que anulava o ganho de caber no free tier ao lado do
+Postgres. A stack completa continua disponível para desenvolvimento e para quando o
+projeto crescer o bastante para justificar hospedá-la de novo — ver
+[Como rodar](como-rodar.md).
 
 ## O caminho de um dado, camada a camada
 

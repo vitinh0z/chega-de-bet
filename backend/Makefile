@@ -3,6 +3,10 @@
 
 .DEFAULT_GOAL := help
 
+# A stack de desenvolvimento é o compose base MAIS o overlay de observabilidade local.
+# Sozinho, o base é a stack enxuta da VM (app + postgres + alloy -> Grafana Cloud).
+COMPOSE_DEV := docker compose -f docker-compose.yml -f docker-compose.observability.yml
+
 .PHONY: help
 help: ## Lista os alvos disponíveis
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -20,20 +24,36 @@ run: ## Sobe a aplicação localmente (perfil dev)
 	mvn spring-boot:run -Dspring-boot.run.profiles=dev
 
 .PHONY: up
-up: ## Sobe toda a stack (app + banco + observabilidade)
+up: ## Sobe a stack completa de desenvolvimento (app + banco + observabilidade local)
+	$(COMPOSE_DEV) up -d --build
+
+.PHONY: up-prod
+up-prod: ## Sobe a stack enxuta da VM (app + banco + alloy -> Grafana Cloud)
+	@test -f .env || { \
+		echo "Falta o arquivo .env com as credenciais do Grafana Cloud."; \
+		echo "Copie o modelo:  cp .env.example .env"; \
+		exit 1; \
+	}
+	@for var in GRAFANA_CLOUD_PROM_URL GRAFANA_CLOUD_PROM_USER GRAFANA_CLOUD_LOKI_URL GRAFANA_CLOUD_LOKI_USER GRAFANA_CLOUD_TOKEN; do \
+		grep -qE "^$$var=.+" .env || { \
+			echo "$$var está vazio no .env."; \
+			echo "Sem as cinco variáveis, o Alloy sobe normalmente e não envia nada — a falha é silenciosa."; \
+			exit 1; \
+		}; \
+	done
 	docker compose up -d --build
 
 .PHONY: down
-down: ## Derruba a stack
-	docker compose down
+down: ## Derruba a stack (completa ou enxuta)
+	$(COMPOSE_DEV) down
 
 .PHONY: infra
-infra: ## Sobe só a infra de apoio (banco + observabilidade), sem a app
-	docker compose up -d postgres prometheus loki alloy grafana
+infra: ## Sobe só a infra de apoio local (banco + observabilidade), sem a app
+	$(COMPOSE_DEV) up -d postgres prometheus loki alloy grafana
 
 .PHONY: logs
 logs: ## Acompanha os logs dos contêineres
-	docker compose logs -f
+	$(COMPOSE_DEV) logs -f
 
 .PHONY: clean
 clean: ## Limpa artefatos de build
