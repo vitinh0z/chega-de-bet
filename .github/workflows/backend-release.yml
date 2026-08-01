@@ -1,0 +1,67 @@
+name: Backend — publicar imagem ARM64
+
+# Compila a imagem do backend em runner ARM64 e publica no GHCR, para a VM apenas
+# baixar em vez de compilar.
+#
+# Por que ARM nativo e não emulação: o destino da Fase 1 é uma Oracle Ampere A1, que é
+# aarch64. Compilar na própria VM gastaria a RAM e a CPU que queremos preservar, e
+# buildar com QEMU em runner x86 é lento. Runner ARM é gratuito em repositório público.
+#
+# Este workflow constrói a imagem JVM. Se um dia a imagem nativa (GraalVM) for
+# necessária, ela entra aqui como um job adicional — e precisa ser neste mesmo runner,
+# porque native-image NÃO faz cross-compile de arquitetura. Ver docs/deploy.md.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-release.yml"
+  # Permite publicar sob demanda a partir de qualquer branch, útil para testar o deploy
+  # antes de um release de verdade.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publicar:
+    name: Build ARM64 + push para o GHCR
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Autenticar no GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          # Token do próprio job: não precisa de secret configurado à mão.
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Definir tags e labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}/backend
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=long
+          labels: |
+            org.opencontainers.image.title=chega-de-bet-backend
+            org.opencontainers.image.description=API de denúncia e moderação do Chega de Bet
+
+      - name: Build e push
+        uses: docker/build-push-action@v7
+        with:
+          context: backend
+          # Só arm64: é o destino da Fase 1. Em x86 (dev), o compose constrói local.
+          platforms: linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Cache entre execuções: sem ele, todo build rebaixa as dependências Maven.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
