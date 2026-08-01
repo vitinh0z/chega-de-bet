@@ -6,7 +6,7 @@ Visão técnica de ponta a ponta. O sistema tem três camadas que conversam entr
 - **Frontend** — aplicações web usadas por moderadores e pelo público (painel e dashboard).
 - **Backend** — a API Spring Boot, o banco e o pipeline que gera a blocklist.
 
-> Estado atual: **cliente** e **backend** estão em construção; o **frontend** (painel de moderação e dashboard) entra na Fase 2 do roadmap.
+> Estado atual: o **backend** já processa denúncia, moderação e autenticação — falta só a publicação real da blocklist. O **cliente** está em construção. O **frontend** (painel de moderação e dashboard) entra na Fase 2 do roadmap. Até lá, a moderação acontece por chamada direta e autenticada à API.
 
 ## Diagrama geral
 
@@ -79,7 +79,7 @@ projeto crescer o bastante para justificar hospedá-la de novo — ver
 ## O caminho de um dado, camada a camada
 
 ### Backend -> Frontend -> Cliente (distribuição da lista)
-1. Um moderador aprova um domínio no **painel (frontend)**, que chama a **API (backend)**.
+1. Um moderador aprova um domínio chamando a **API (backend)** direto, autenticado por HTTP Basic. O **painel (frontend)** ainda não existe — é a interface planejada para a Fase 2.
 2. O backend registra no **PostgreSQL** e o **pipeline** faz commit no Git, gera e **assina** a blocklist.
 3. A lista assinada é publicada na **CDN**.
 4. A **extensão (cliente)** baixa a lista atualizada e passa a bloquear o domínio — validando a assinatura antes de aplicar.
@@ -87,7 +87,7 @@ projeto crescer o bastante para justificar hospedá-la de novo — ver
 ### Cliente -> Backend (denúncia colaborativa)
 1. A pessoa clica em "denunciar" na **extensão (cliente)**.
 2. A extensão envia o domínio (anônimo) para a **API (backend)** via `POST /api/denuncias`.
-3. O backend coloca em **quarentena**; a denúncia só vira bloqueio após revisão humana no **frontend**.
+3. O backend coloca em **quarentena**. A denúncia só vira bloqueio após revisão humana de um moderador, hoje via API autenticada.
 
 ## Detalhamento por camada
 

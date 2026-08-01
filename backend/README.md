@@ -1,6 +1,6 @@
 # Backend — Chega de Bet
 
-API de denúncia e moderação de domínios de aposta. Este diretório contém o **esqueleto** do serviço: estrutura, dependências e infra de observabilidade já configuradas, com as classes ainda **sem implementação** (marcadas com `TODO`).
+API de denúncia e moderação de domínios de aposta. Já implementa denúncia com deduplicação, fila de moderação com decisão auditável, autenticação de moderador e emissão de token efêmero com rate limit. Falta a publicação real da blocklist — hoje é um placeholder que só loga.
 
 > Procurando o passo a passo para rodar o projeto pela primeira vez? Veja [docs/como-rodar.md](../docs/como-rodar.md). Procurando como a imagem chega até a VM de produção? Veja [docs/deploy.md](../docs/deploy.md).
 
@@ -50,7 +50,7 @@ backend/
     └── test/java/com/chegadebet/     # Testcontainers + contextLoads
 ```
 
-> As classes Java estão **vazias de propósito** (só a estrutura + `TODO`). O projeto compila e sobe o contexto; a lógica de negócio será preenchida pelas issues de backend do roadmap.
+> A lógica de negócio principal já está implementada. Restam poucos `TODO` pontuais (info da OpenAPI, uma exceção de domínio, paginação da fila de moderação). A publicação real da blocklist também falta — ainda é um placeholder.
 
 ## Como rodar
 

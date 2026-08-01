@@ -6,7 +6,7 @@ Chega de Bet é uma extensão de navegador que bloqueia anúncios e domínios de
 
 A lista de domínios bloqueados (a blocklist) não é feita por uma pessoa só. Qualquer um pode denunciar um domínio suspeito. Uma pessoa moderadora revisa cada denúncia antes de qualquer bloqueio entrar em vigor.
 
-**Status:** em desenvolvimento inicial. O esqueleto do backend (Spring Boot) já está no repositório. A extensão (cliente) e o painel de moderação (frontend) ainda estão em construção. Veja o estado atual de cada parte em [Arquitetura](docs/arquitetura.md).
+**Status:** em desenvolvimento inicial. O backend (Spring Boot) já processa denúncia, moderação e autenticação. Falta publicar a blocklist de verdade — hoje isso é um placeholder. A extensão (cliente) e o painel de moderação (frontend) ainda estão em construção. Veja o estado atual de cada parte em [Arquitetura](docs/arquitetura.md).
 
 ---
 

@@ -18,7 +18,7 @@ A blocklist ainda não existe como artefato público — ela nasce junto com o b
 ## Código
 
 1. Faça um fork do repositório e clone o seu fork.
-2. Crie uma branch a partir de `main`.
+2. Crie uma branch a partir de `develop`.
 3. Se for mexer no backend, siga [docs/como-rodar.md](docs/como-rodar.md) para subir o ambiente local.
 4. Rode os testes antes de abrir o PR:
    ```bash

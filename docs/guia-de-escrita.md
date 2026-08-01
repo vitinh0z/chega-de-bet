@@ -67,7 +67,10 @@ Evite "isso", "aquilo" ou "essa parte" sem um substantivo claro por perto. Repit
 | Domínio | O endereço (ex.: `exemplo.com`) avaliado para entrar ou não na blocklist. |
 | Blocklist | A lista assinada de domínios bloqueados, distribuída para a extensão. |
 | Moderação | A revisão humana que decide se uma denúncia vira bloqueio. |
+| Moderador | A pessoa autorizada a revisar denúncias e decidir sobre elas. |
+| Decisão de moderação | O registro auditável de uma aprovação ou rejeição feita por um moderador. |
 | Quarentena | O estado de uma denúncia entre o envio e a decisão da moderação. |
+| Token efêmero | Um token de curta duração, emitido com limite por origem, usado para conter abuso no envio de denúncias. |
 | Falso positivo | Um domínio legítimo bloqueado por engano. É tratado como falha crítica. |
 | Cliente | A extensão de navegador instalada por quem usa o Chega de Bet. |
 | Backend | A API e o banco de dados que processam denúncias e geram a blocklist. |
