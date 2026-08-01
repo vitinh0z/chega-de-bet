@@ -34,11 +34,13 @@ up-prod: ## Sobe a stack enxuta da VM (app + banco + alloy -> Grafana Cloud)
 		echo "Copie o modelo:  cp .env.example .env"; \
 		exit 1; \
 	}
-	@grep -qE '^GRAFANA_CLOUD_PROM_URL=.+' .env || { \
-		echo "GRAFANA_CLOUD_PROM_URL está vazio no .env."; \
-		echo "Sem isso o Alloy sobe normalmente e não envia nada — a falha é silenciosa."; \
-		exit 1; \
-	}
+	@for var in GRAFANA_CLOUD_PROM_URL GRAFANA_CLOUD_PROM_USER GRAFANA_CLOUD_LOKI_URL GRAFANA_CLOUD_LOKI_USER GRAFANA_CLOUD_TOKEN; do \
+		grep -qE "^$$var=.+" .env || { \
+			echo "$$var está vazio no .env."; \
+			echo "Sem as cinco variáveis, o Alloy sobe normalmente e não envia nada — a falha é silenciosa."; \
+			exit 1; \
+		}; \
+	done
 	docker compose up -d --build
 
 .PHONY: down

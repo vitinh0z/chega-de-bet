@@ -93,8 +93,8 @@ anulava o ganho de caber no free tier ao lado do Postgres. Na VM fica só o **Al
 `remote_write` para o Grafana Cloud — nada é armazenado na VM.
 
 O que separa as duas montagens é qual arquivo o Alloy monta:
-`observability/alloy/config.alloy` (nuvem) ou `config.local.alloy` (Loki local). O
-overlay `docker-compose.observability.yml` troca um pelo outro.
+`observability/alloy/config.alloy` (nuvem) ou `observability/alloy/config.local.alloy`
+(Loki local). O overlay `docker-compose.observability.yml` troca um pelo outro.
 
 Para a VM, copie `.env.example` para `.env` e preencha as credenciais do Grafana Cloud.
 `make up-prod` recusa subir sem elas: o Alloy sobe normalmente com a URL vazia e
