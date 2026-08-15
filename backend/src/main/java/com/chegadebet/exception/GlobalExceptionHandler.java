@@ -1,5 +1,7 @@
 package com.chegadebet.exception;
 
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -43,6 +45,27 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
                 .collect(Collectors.joining("; "));
         return handleExceptionInternal(ex, erro(status, mensagem, request), headers, status, request);
+    }
+
+    /**
+     * Falhas de validação em <b>parâmetro</b> de método ({@code @Min}, {@code @Max} em
+     * query string) -&gt; 400.
+     * <p>
+     * É um caminho diferente do {@code @Valid} de corpo: aquele estoura
+     * {@code MethodArgumentNotValidException}, tratado acima, e este estoura
+     * {@code ConstraintViolationException}, que vem da validação por proxy do
+     * {@code @Validated}. Sem este método, {@code ?tamanho=99999} cairia na rede de
+     * segurança genérica e responderia <b>500</b> — dizendo ao cliente que o servidor
+     * quebrou, quando na verdade o pedido é que estava fora do limite.
+     */
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ErroResponse> handleParametroInvalido(ConstraintViolationException ex,
+                                                                WebRequest request) {
+        String mensagem = ex.getConstraintViolations().stream()
+                .map(ConstraintViolation::getMessage)
+                .collect(Collectors.joining("; "));
+        return ResponseEntity.badRequest()
+                .body(erro(HttpStatus.BAD_REQUEST, mensagem, request));
     }
 
     @ExceptionHandler(RecursoNaoEncontradoException.class)

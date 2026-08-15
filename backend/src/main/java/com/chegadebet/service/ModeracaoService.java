@@ -17,12 +17,15 @@ import com.chegadebet.repository.DenunciaRepository;
 import com.chegadebet.repository.DominioRepository;
 import com.chegadebet.repository.SinalScrapingRepository;
 import com.chegadebet.web.dto.DominioResponse;
+import com.chegadebet.web.dto.PaginaResponse;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -61,6 +64,21 @@ public class ModeracaoService {
     private static final int PESO_VOLUME = 10;
     private static final int PESO_RECENCIA = 5;
     private static final Duration JANELA_RECENCIA = Duration.ofDays(7);
+
+    /**
+     * A ordem da fila: maior score primeiro, e entre empates o mais antigo.
+     * <p>
+     * Constante e não parâmetro: qual domínio o moderador vê primeiro é regra de
+     * moderação, não preferência de quem chama a API. Aceitar um {@code sort} da query
+     * string permitiria pedir a fila pelo <i>menor</i> score — e a fila deixaria de
+     * significar prioridade.
+     * <p>
+     * O índice {@code ix_dominio_fila_moderacao} espelha exatamente estas colunas, nesta
+     * ordem e nestes sentidos. Mudar um sem o outro faz o banco voltar a ordenar em
+     * memória, em silêncio.
+     */
+    private static final Sort ORDEM_DA_FILA =
+            Sort.by(Sort.Order.desc("score"), Sort.Order.asc("criadoEm"));
 
     /**
      * Quanto cada tipo de evidência da pré-análise soma no score.
@@ -110,18 +128,42 @@ public class ModeracaoService {
     }
 
     /**
-     * Fila de moderação: os domínios em quarentena, do maior score para o menor.
+     * Uma página da fila de moderação: domínios em quarentena, do maior score para o menor.
+     *
+     * <h2>Por que o desempate por data é obrigatório</h2>
+     * Ordenar só por {@code score} não define uma ordem total, porque scores empatam com
+     * frequência — a fórmula é feita de múltiplos de 10 e 5. E SQL não promete ordem
+     * nenhuma entre linhas de mesma chave: o Postgres pode devolver dois domínios de score
+     * 30 em ordens diferentes em duas execuções da mesma consulta.
+     * <p>
+     * Sem paginação isso era inofensivo, porque a resposta trazia todo mundo. Com
+     * {@code LIMIT/OFFSET} vira erro de verdade: se a ordem muda entre a página 0 e a
+     * página 1, um domínio pode aparecer nas duas — ou em nenhuma. Um domínio que some da
+     * fila de moderação é um site de aposta que ninguém analisa.
+     * <p>
+     * {@code criadoEm} desempata e ainda escolhe o critério justo: entre iguais, o que
+     * está esperando há mais tempo vem primeiro.
+     *
+     * <h2>O que esta paginação não resolve</h2>
+     * O score muda enquanto o moderador navega — cada denúncia nova e cada pré-análise
+     * recalculam. Um domínio pode subir de página entre uma requisição e outra e ser visto
+     * duas vezes, ou descer e ser pulado. Resolver isso pediria paginação por cursor sobre
+     * uma chave imutável, e o preço seria perder o "pule para a página 5".
+     * <p>
+     * Para uma fila de trabalho humano a troca compensa: o moderador processa o topo, e o
+     * que escapar de uma passagem continua na fila para a próxima — nada é perdido de
+     * forma permanente, porque só a decisão humana tira domínio de {@code EM_ANALISE}.
+     *
+     * @param pagina  índice começando em zero
+     * @param tamanho quantos itens por página
      */
-    // TODO: paginar. A fila cresce sem limite e devolver tudo de uma vez não escala.
-    //       Troque por Page<DominioResponse> aqui e por um método que receba Pageable
-    //       no DominioRepository — só mudar o tipo de retorno não pagina nada, porque
-    //       a consulta continuaria trazendo a fila inteira do banco.
     @Transactional(readOnly = true)
-    public List<DominioResponse> listarFila() {
-        return dominioRepository.findByStatusOrderByScoreDesc(StatusDominio.EM_ANALISE)
-                .stream()
-                .map(dominioMapper::toResponse)
-                .toList();
+    public PaginaResponse<DominioResponse> listarFila(int pagina, int tamanho) {
+        Pageable pageable = PageRequest.of(pagina, tamanho, ORDEM_DA_FILA);
+
+        return PaginaResponse.de(
+                dominioRepository.findByStatus(StatusDominio.EM_ANALISE, pageable)
+                        .map(dominioMapper::toResponse));
     }
 
     /**

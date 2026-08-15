@@ -2,6 +2,7 @@ package com.chegadebet.repository;
 
 import com.chegadebet.domain.enums.StatusDominio;
 import com.chegadebet.domain.model.Dominio;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -17,8 +18,15 @@ public interface DominioRepository extends JpaRepository<Dominio, UUID> {
     // Procura pela URL denunciada
     Optional<Dominio> findByHost(String host);
 
-    // Lista os domínios de um status, do maior score para o menor.
-    List<Dominio> findByStatusOrderByScoreDesc(StatusDominio status);
+    /**
+     * Uma página da fila de um status.
+     * <p>
+     * A ordenação <b>não</b> vem do nome do método, e sim do {@code Pageable} montado em
+     * {@code ModeracaoService}. É deliberado: a ordem da fila de moderação é regra de
+     * negócio, não preferência de quem chama, e um {@code OrderBy} aqui daria a impressão
+     * de que o serviço pode passar outra e ela valeria.
+     */
+    Page<Dominio> findByStatus(StatusDominio status, Pageable pageable);
 
     // Usado pela pré-análise a cada hop de redirecionamento: se o destino já é um domínio
     // aprovado, não há o que descobrir baixando a página dele. Ver DomainScraperClient.

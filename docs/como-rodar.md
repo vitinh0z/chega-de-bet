@@ -113,6 +113,33 @@ recusar todo mundo com 401. Depois de criar a conta, remova as variáveis do amb
 curl -u ana:'senha longa de verdade' http://localhost:8080/api/moderacao/fila
 ```
 
+A fila é paginada. Sem parâmetros, ela devolve os 50 primeiros:
+
+```bash
+curl -u ana:'senha' 'http://localhost:8080/api/moderacao/fila?pagina=1&tamanho=20'
+```
+
+```json
+{
+  "itens": [ { "id": "...", "host": "exemplo.com", "status": "EM_ANALISE", "score": 45 } ],
+  "pagina": 1,
+  "tamanho": 20,
+  "totalDeItens": 137,
+  "totalDePaginas": 7
+}
+```
+
+O `tamanho` vai até 200. Acima disso a resposta é 400 — sem esse teto, um `tamanho`
+gigante traria a fila inteira e desfaria a paginação.
+
+A ordem é fixa: maior `score` primeiro e, entre empates, o domínio que está esperando há
+mais tempo. Não é possível pedir outra ordenação, porque a ordem da fila é a prioridade da
+moderação.
+
+> **Atenção:** o `score` muda enquanto você navega, a cada denúncia nova e a cada
+> pré-análise. Um domínio pode mudar de página entre duas requisições. Nada se perde: só a
+> decisão humana tira um domínio da fila, então o que escapar de uma passagem continua lá.
+
 ## Testes
 
 Os testes de backend usam Testcontainers e exigem Docker rodando:
