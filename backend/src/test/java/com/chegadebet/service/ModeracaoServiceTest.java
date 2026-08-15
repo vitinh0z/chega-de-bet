@@ -11,6 +11,7 @@ import com.chegadebet.mapper.DominioMapper;
 import com.chegadebet.repository.DecisaoModeracaoRepository;
 import com.chegadebet.repository.DenunciaRepository;
 import com.chegadebet.repository.DominioRepository;
+import com.chegadebet.repository.SinalScrapingRepository;
 import com.chegadebet.web.dto.DominioResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -55,6 +56,8 @@ class ModeracaoServiceTest {
     @Mock
     private DecisaoModeracaoRepository decisaoRepository;
     @Mock
+    private SinalScrapingRepository sinalScrapingRepository;
+    @Mock
     private BlocklistPublisher blocklistPublisher;
 
     private ModeracaoService moderacaoService;
@@ -69,10 +72,17 @@ class ModeracaoServiceTest {
         ModeracaoProperties properties = new ModeracaoProperties(
                 2, List.of("gov.br", "jus.br"), 5);
 
+        // ProtecaoAllowlist real: é uma função pura sobre a mesma configuração, e um mock
+        // dela apagaria justamente a regra de sufixo que estes testes verificam.
         moderacaoService = new ModeracaoService(dominioRepository, denunciaRepository,
-                decisaoRepository, dominioMapper, properties, blocklistPublisher);
+                decisaoRepository, sinalScrapingRepository, dominioMapper, properties,
+                new ProtecaoAllowlist(properties), blocklistPublisher);
 
         when(dominioRepository.save(any(Dominio.class))).thenAnswer(chamada -> chamada.getArgument(0));
+        // Sem pré-análise por padrão: os testes daqui são sobre denúncia, quórum e
+        // allowlist. Quem precisa de medição a declara no próprio teste.
+        when(sinalScrapingRepository.findTopByDominioOrderByCriadoEmDesc(any()))
+                .thenReturn(Optional.empty());
     }
 
     private Dominio dominioEmAnalise(String host) {
