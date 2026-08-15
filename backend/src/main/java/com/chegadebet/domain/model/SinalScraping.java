@@ -6,7 +6,6 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UuidGenerator;
 import org.hibernate.type.SqlTypes;
@@ -95,7 +94,21 @@ public class SinalScraping {
     @Column(name = "duracao_ms", nullable = false)
     private long duracaoMs;
 
-    @CreationTimestamp
+    /**
+     * Quando a medição aconteceu.
+     * <p>
+     * Preenchido por quem grava, e não por {@code @CreationTimestamp}. Duas razões:
+     * <ul>
+     *   <li><b>Semântica.</b> Em uma trilha de auditoria, a data que importa é a do fato
+     *       medido, não a do momento em que a transação deu flush.</li>
+     *   <li><b>Disponibilidade.</b> O {@code @CreationTimestamp} do Hibernate 6 é gerado
+     *       na hora de montar o INSERT, ou seja, no flush. Logo depois de um
+     *       {@code save()} o campo ainda é {@code null} — e quem precisa dele para
+     *       atualizar {@code Dominio.ultimaPreAnaliseEm} na mesma transação recebia nulo
+     *       em silêncio, o que desligava o cooldown inteiro.</li>
+     * </ul>
+     * {@code updatable = false} continua: uma medição gravada não pode ser redatada.
+     */
     @Column(name = "criado_em", nullable = false, updatable = false)
     private Instant criadoEm;
 }

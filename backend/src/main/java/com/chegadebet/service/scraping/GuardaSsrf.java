@@ -114,56 +114,90 @@ public class GuardaSsrf {
     }
 
     /**
+     * As faixas IPv4 que a pré-análise nunca alcança, como CIDR de verdade.
+     * <p>
+     * Pares {@code (rede, prefixo)} achatados em um {@code int[]}: um bloco contíguo de
+     * memória, sem objeto por faixa e sem boxing. A checagem de cada faixa é
+     * {@code (ip & mascara) == rede} — que é a definição de CIDR, não uma aproximação
+     * dela. A versão anterior comparava octeto a octeto com intervalos escritos à mão
+     * ({@code segundo >= 64 && segundo <= 127}), e cada linha dessas é uma chance de
+     * errar o limite da faixa em um.
+     * <p>
+     * A ordem é a da probabilidade de acerto: privado e loopback primeiro, exóticos
+     * depois. Em um endereço público a varredura percorre a lista inteira, e são doze
+     * comparações de inteiro — trabalho irrelevante ao lado da resolução de DNS que
+     * acabou de acontecer.
+     */
+    private static final int[] FAIXAS_IPV4_PROIBIDAS = {
+            ip(10, 0, 0, 0), 8,          // RFC 1918 — rede privada
+            ip(172, 16, 0, 0), 12,       // RFC 1918 — rede privada
+            ip(192, 168, 0, 0), 16,      // RFC 1918 — rede privada
+            ip(127, 0, 0, 0), 8,         // Loopback: o próprio backend
+            ip(169, 254, 0, 0), 16,      // Link-local. Contém o 169.254.169.254 de metadados
+            ip(0, 0, 0, 0), 8,           // "Esta rede". Vários sistemas tratam como loopback
+            ip(100, 64, 0, 0), 10,       // CGNAT (RFC 6598). O JDK não conhece esta faixa
+            ip(192, 0, 0, 0), 24,        // Atribuições de protocolo da IETF (NAT64 well-known)
+            ip(198, 18, 0, 0), 15,       // Faixa de benchmark, roteada para dentro em labs
+            ip(192, 0, 2, 0), 24,        // TEST-NET-1 (RFC 5737)
+            ip(198, 51, 100, 0), 24,     // TEST-NET-2
+            ip(203, 0, 113, 0), 24,      // TEST-NET-3
+            ip(224, 0, 0, 0), 4,         // Multicast
+            ip(240, 0, 0, 0), 4          // Reservado, inclui 255.255.255.255
+    };
+
+    /**
      * Se este endereço está fora do que a pré-análise pode alcançar.
      * <p>
-     * O {@link InetAddress} responde a parte disso sozinho, mas não a tudo — as faixas
-     * checadas na mão abaixo são justamente as que ele ignora, e cada uma delas é um
-     * caminho real para dentro da infraestrutura.
+     * IPv4 é resolvido inteiramente pela tabela CIDR acima. Para IPv6 continuamos usando
+     * os predicados do {@link InetAddress}, mais a faixa {@code fc00::/7} que ele não
+     * conhece.
      */
     boolean proibido(InetAddress endereco) {
-        if (endereco.isLoopbackAddress()      // 127.0.0.0/8, ::1 — o próprio backend
-                || endereco.isAnyLocalAddress()   // 0.0.0.0, :: — resolve para "esta máquina"
-                || endereco.isLinkLocalAddress()  // 169.254.0.0/16 inclui o endpoint de metadados
-                || endereco.isSiteLocalAddress()  // RFC 1918: 10/8, 172.16/12, 192.168/16
-                || endereco.isMulticastAddress()) {
-            return true;
-        }
-
         byte[] bytes = endereco.getAddress();
-        if (bytes.length == 4) {
-            return proibidoIpv4(bytes);
-        }
-        return proibidoIpv6(bytes);
+        return bytes.length == 4 ? proibidoIpv4(bytes) : proibidoIpv6(endereco, bytes);
     }
 
+    /**
+     * Os quatro octetos viram um {@code int} e a comparação é de máscara.
+     * <p>
+     * Um endereço IPv4 <b>é</b> um inteiro de 32 bits — trabalhar com ele como tal é a
+     * representação natural, e não um truque. O deslocamento aritmético
+     * {@code -1 << (32 - prefixo)} monta a máscara do prefixo: para {@code /10} dá
+     * {@code 0xFFC00000}, exatamente os 10 bits mais significativos.
+     * <p>
+     * O caso {@code prefixo == 0} não aparece na tabela, e nem poderia: {@code -1 << 32}
+     * em Java desloca por {@code 32 & 31 == 0} e devolveria {@code -1}, uma máscara que
+     * não casa nada. Nenhuma faixa de {@code /0} é bloqueável de qualquer forma, porque
+     * {@code /0} é a internet inteira.
+     */
     private boolean proibidoIpv4(byte[] b) {
-        int primeiro = Byte.toUnsignedInt(b[0]);
-        int segundo = Byte.toUnsignedInt(b[1]);
+        int ip = (b[0] & 0xFF) << 24 | (b[1] & 0xFF) << 16 | (b[2] & 0xFF) << 8 | (b[3] & 0xFF);
 
-        // 100.64.0.0/10 — CGNAT (RFC 6598). Operadoras usam esta faixa entre o cliente e
-        // a internet, e em algumas nuvens ela alcança serviços internos. isSiteLocalAddress
-        // não a conhece, porque ela é posterior à RFC 1918.
-        if (primeiro == 100 && segundo >= 64 && segundo <= 127) {
-            return true;
+        for (int i = 0; i < FAIXAS_IPV4_PROIBIDAS.length; i += 2) {
+            int mascara = -1 << (32 - FAIXAS_IPV4_PROIBIDAS[i + 1]);
+            if ((ip & mascara) == FAIXAS_IPV4_PROIBIDAS[i]) {
+                return true;
+            }
         }
-        // 192.0.0.0/24 — atribuições de protocolo da IETF, entre elas o NAT64 well-known.
-        if (primeiro == 192 && segundo == 0 && Byte.toUnsignedInt(b[2]) == 0) {
-            return true;
-        }
-        // 198.18.0.0/15 — faixa de benchmark, roteada para dentro em muitos laboratórios.
-        if (primeiro == 198 && (segundo == 18 || segundo == 19)) {
-            return true;
-        }
-        // 0.0.0.0/8 — "esta rede". Vários sistemas operacionais tratam como loopback.
-        return primeiro == 0;
+        return false;
     }
 
-    private boolean proibidoIpv6(byte[] b) {
-        int primeiro = Byte.toUnsignedInt(b[0]);
-
+    private boolean proibidoIpv6(InetAddress endereco, byte[] b) {
         // fc00::/7 — Unique Local Address, o equivalente IPv6 da RFC 1918. O
         // isSiteLocalAddress do Java só conhece fec0::/10, que foi depreciado e
         // substituído justamente por esta faixa.
-        return (primeiro & 0xFE) == 0xFC;
+        if ((b[0] & 0xFE) == 0xFC) {
+            return true;
+        }
+        return endereco.isLoopbackAddress()        // ::1
+                || endereco.isAnyLocalAddress()    // ::
+                || endereco.isLinkLocalAddress()   // fe80::/10
+                || endereco.isSiteLocalAddress()   // fec0::/10, depreciado mas ainda existe
+                || endereco.isMulticastAddress();  // ff00::/8
+    }
+
+    /** Monta o inteiro de 32 bits de um endereço IPv4 escrito em octetos. */
+    private static int ip(int a, int b, int c, int d) {
+        return a << 24 | b << 16 | c << 8 | d;
     }
 }

@@ -11,6 +11,7 @@ import com.chegadebet.domain.scraping.AssinaturaEncontrada;
 import com.chegadebet.exception.EstadoInvalidoException;
 import com.chegadebet.exception.RecursoNaoEncontradoException;
 import com.chegadebet.mapper.DominioMapper;
+import com.chegadebet.repository.ContagemDenunciantes;
 import com.chegadebet.repository.DecisaoModeracaoRepository;
 import com.chegadebet.repository.DenunciaRepository;
 import com.chegadebet.repository.DominioRepository;
@@ -238,11 +239,30 @@ public class ModeracaoService {
      */
     @Transactional
     public void recalcularScore(Dominio dominio) {
-        long distintos = denunciaRepository.countDenunciantesDistintos(dominio);
-        long recentes = denunciaRepository.countDenunciantesDistintosDesde(
+        // Sem medição em mãos: lê a última do banco. É o caminho da denúncia nova, que
+        // não sabe nada sobre pré-análise.
+        recalcularScore(dominio, pontuarUltimaPreAnalise(dominio));
+    }
+
+    /**
+     * Recalcula o score com a pontuação da pré-análise já calculada.
+     * <p>
+     * Existe para o caminho do worker, que <b>acabou de</b> produzir a medição. A versão
+     * de um argumento releria do banco a linha que a transação corrente escreveu segundos
+     * antes — uma consulta por domínio, a cada ciclo, para chegar a um valor que já estava
+     * em memória.
+     *
+     * @param pontosDaPreAnalise quanto as evidências da medição valem. Ver
+     *                           {@link #pontuar(SinalScraping)}
+     */
+    @Transactional
+    public void recalcularScore(Dominio dominio, int pontosDaPreAnalise) {
+        ContagemDenunciantes denunciantes = denunciaRepository.contarDenunciantes(
                 dominio, Instant.now().minus(JANELA_RECENCIA));
 
-        long total = distintos * PESO_VOLUME + recentes * PESO_RECENCIA + pontuarPreAnalise(dominio);
+        long total = denunciantes.total() * PESO_VOLUME
+                + denunciantes.recentes() * PESO_RECENCIA
+                + pontosDaPreAnalise;
 
         dominio.setScore((int) total);
         reabrirSeVoltouAoRadar(dominio);
@@ -250,7 +270,7 @@ public class ModeracaoService {
     }
 
     /**
-     * Quanto a última pré-análise soma ao score.
+     * Quanto uma medição soma ao score.
      * <p>
      * Cada <b>tipo</b> de sinal conta uma vez, por mais evidências daquele tipo que a
      * medição tenha encontrado. Sem esse corte, uma página que repete "cassino" quarenta
@@ -259,16 +279,31 @@ public class ModeracaoService {
      * <p>
      * Falha técnica vale zero, e não um valor negativo. Uma casa de aposta atrás de um WAF
      * que recusa robôs não é menos casa de aposta por isso.
+     * <p>
+     * A soma usa um bitset de tipos em vez de {@code stream().distinct()}: são cinco
+     * valores de enum, e um {@code int} com um bit por tipo responde "já contei este?" sem
+     * montar o conjunto de hash que o {@code distinct} precisa por trás.
      */
-    private int pontuarPreAnalise(Dominio dominio) {
-        return sinalScrapingRepository.findTopByDominioOrderByCriadoEmDesc(dominio)
-                .filter(SinalScraping::isSucesso)
-                .map(sinal -> sinal.getAssinaturas().stream()
-                        .map(AssinaturaEncontrada::tipo)
-                        .distinct()
-                        .mapToInt(tipo -> PESO_POR_SINAL.getOrDefault(tipo, 0))
-                        .sum())
-                .orElse(0);
+    public static int pontuar(SinalScraping sinal) {
+        if (sinal == null || !sinal.isSucesso()) {
+            return 0;
+        }
+        int tiposJaContados = 0;
+        int pontos = 0;
+
+        for (AssinaturaEncontrada assinatura : sinal.getAssinaturas()) {
+            int bit = 1 << assinatura.tipo().ordinal();
+            if ((tiposJaContados & bit) == 0) {
+                tiposJaContados |= bit;
+                pontos += PESO_POR_SINAL.getOrDefault(assinatura.tipo(), 0);
+            }
+        }
+        return pontos;
+    }
+
+    private int pontuarUltimaPreAnalise(Dominio dominio) {
+        return pontuar(sinalScrapingRepository.findTopByDominioOrderByCriadoEmDesc(dominio)
+                .orElse(null));
     }
 
     /**

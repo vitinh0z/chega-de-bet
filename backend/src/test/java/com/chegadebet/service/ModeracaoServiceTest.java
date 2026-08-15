@@ -10,6 +10,7 @@ import com.chegadebet.exception.RecursoNaoEncontradoException;
 import com.chegadebet.mapper.DominioMapper;
 import com.chegadebet.repository.DecisaoModeracaoRepository;
 import com.chegadebet.repository.DenunciaRepository;
+import com.chegadebet.repository.ContagemDenunciantes;
 import com.chegadebet.repository.DominioRepository;
 import com.chegadebet.repository.SinalScrapingRepository;
 import com.chegadebet.web.dto.DominioResponse;
@@ -32,6 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -93,6 +95,12 @@ class ModeracaoServiceTest {
         dominio.setCriadoEm(Instant.now());
         when(dominioRepository.findById(dominio.getId())).thenReturn(Optional.of(dominio));
         return dominio;
+    }
+
+    /** As duas contagens agora vêm juntas, de uma consulta só. */
+    private void contagem(Dominio dominio, long total, long recentes) {
+        when(denunciaRepository.contarDenunciantes(eq(dominio), any()))
+                .thenReturn(new ContagemDenunciantes(total, recentes));
     }
 
     private void votosDeAprovacao(long quantidade) {
@@ -239,8 +247,7 @@ class ModeracaoServiceTest {
     void recalcularScoreUsaDenunciantesDistintos() {
         Dominio dominio = dominioEmAnalise("apostaqui.com");
         // 10 denúncias do mesmo hash = 1 denunciante distinto.
-        when(denunciaRepository.countDenunciantesDistintos(dominio)).thenReturn(1L);
-        when(denunciaRepository.countDenunciantesDistintosDesde(any(), any())).thenReturn(1L);
+        contagem(dominio, 1L, 1L);
 
         moderacaoService.recalcularScore(dominio);
 
@@ -253,8 +260,7 @@ class ModeracaoServiceTest {
     @DisplayName("recalcularScore não muda o status de um domínio em análise")
     void recalcularScoreNaoDecideStatus() {
         Dominio dominio = dominioEmAnalise("apostaqui.com");
-        when(denunciaRepository.countDenunciantesDistintos(dominio)).thenReturn(90L);
-        when(denunciaRepository.countDenunciantesDistintosDesde(any(), any())).thenReturn(90L);
+        contagem(dominio, 90L, 90L);
 
         moderacaoService.recalcularScore(dominio);
 
@@ -273,10 +279,9 @@ class ModeracaoServiceTest {
         rejeicao.setCriadoEm(rejeitadoEm);
         when(decisaoRepository.findTopByDominioAndDecisaoOrderByCriadoEmDesc(dominio, TipoDecisao.REJEICAO))
                 .thenReturn(Optional.of(rejeicao));
-        when(denunciaRepository.countDenunciantesDistintos(dominio)).thenReturn(20L);
+        contagem(dominio, 20L, 6L);
         // 6 denunciantes novos depois da rejeição, limiar é 5.
         when(denunciaRepository.countDenunciantesDistintosDesde(dominio, rejeitadoEm)).thenReturn(6L);
-        when(denunciaRepository.countDenunciantesDistintosDesde(any(), any())).thenReturn(6L);
 
         moderacaoService.recalcularScore(dominio);
 
@@ -294,9 +299,8 @@ class ModeracaoServiceTest {
         rejeicao.setCriadoEm(rejeitadoEm);
         when(decisaoRepository.findTopByDominioAndDecisaoOrderByCriadoEmDesc(dominio, TipoDecisao.REJEICAO))
                 .thenReturn(Optional.of(rejeicao));
-        when(denunciaRepository.countDenunciantesDistintos(dominio)).thenReturn(30L);
+        contagem(dominio, 30L, 2L);
         when(denunciaRepository.countDenunciantesDistintosDesde(dominio, rejeitadoEm)).thenReturn(2L);
-        when(denunciaRepository.countDenunciantesDistintosDesde(any(), any())).thenReturn(2L);
 
         moderacaoService.recalcularScore(dominio);
 

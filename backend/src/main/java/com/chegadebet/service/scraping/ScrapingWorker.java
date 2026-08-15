@@ -63,10 +63,20 @@ public class ScrapingWorker {
     private final RegistroPreAnalise registro;
     private final ScraperProperties propriedades;
 
-    private final MeterRegistry metricas;
+    /** Cache do array do enum: {@code values()} clona a cada chamada. */
+    private static final MotivoFalhaScraping[] MOTIVOS = MotivoFalhaScraping.values();
+
     private final Timer duracaoDaAnalise;
     private final DistributionSummary bytesBaixados;
     private final Counter errosInesperados;
+
+    /**
+     * Um contador por desfecho possível, resolvido na subida.
+     * <p>
+     * São {@code (motivos + 1) x 2} posições: cada motivo de falha mais o sucesso,
+     * combinados com o booleano de indeterminado. Ver {@link #indiceDoDesfecho}.
+     */
+    private final Counter[] execucoes;
     // Gauge alimentado a cada ciclo, e não por consulta sob demanda: um gauge que consulta
     // o banco é executado toda vez que o Prometheus raspa a métrica, e passaria a fazer um
     // COUNT na fila de moderação a cada quinze segundos, para sempre.
@@ -85,7 +95,6 @@ public class ScrapingWorker {
         this.protecaoAllowlist = protecaoAllowlist;
         this.registro = registro;
         this.propriedades = propriedades;
-        this.metricas = metricas;
 
         this.duracaoDaAnalise = Timer.builder("chegadebet.preanalise.duracao")
                 .description("Tempo de uma pré-análise, incluindo repetições")
@@ -98,6 +107,23 @@ public class ScrapingWorker {
                 .description("Exceções não previstas durante uma pré-análise. Deve ficar em zero")
                 .register(metricas);
         metricas.gauge("chegadebet.preanalise.fila", tamanhoDaFila, AtomicInteger::get);
+
+        // Todos os desfechos registrados de uma vez. Registrar na subida também garante
+        // que o desfecho apareça no Prometheus zerado, em vez de só existir depois da
+        // primeira ocorrência — um contador que só nasce quando dá erro é um contador que
+        // ninguém consegue alertar em cima.
+        this.execucoes = new Counter[(MOTIVOS.length + 1) << 1];
+        for (int motivo = 0; motivo <= MOTIVOS.length; motivo++) {
+            String nome = motivo == MOTIVOS.length ? "sucesso" : MOTIVOS[motivo].name();
+            for (int indeterminado = 0; indeterminado <= 1; indeterminado++) {
+                execucoes[(motivo << 1) | indeterminado] =
+                        Counter.builder("chegadebet.preanalise.execucoes")
+                                .description("Pré-análises concluídas, por desfecho")
+                                .tag("motivo", nome)
+                                .tag("indeterminado", indeterminado == 1 ? "true" : "false")
+                                .register(metricas);
+            }
+        }
     }
 
     /**
@@ -260,7 +286,11 @@ public class ScrapingWorker {
                             false, Instant.now(), Duration.between(inicio, Instant.now()));
 
             case RespostaScraping.Documento(String html, String urlFinal, int bytes, boolean cortado) -> {
-                assinaturas.addAll(matcher.analisarConteudo(html));
+                // Um parse só entrega as assinaturas e o veredito de documento vazio.
+                // Eram duas chamadas, e cada uma parseava os 100 KB por conta própria.
+                AssinaturaMatcher.LeituraDeConteudo leitura = matcher.analisar(html);
+                assinaturas.addAll(leitura.assinaturas());
+
                 // O destino do redirecionamento também é um host, e um host revela tanto
                 // quanto o conteúdo: uma página de afiliado inocente que termina em um
                 // .bet.br entregou a informação mais importante na URL, não no HTML.
@@ -268,7 +298,7 @@ public class ScrapingWorker {
 
                 // Corte em hop conhecido não baixou corpo nenhum, então perguntar se o
                 // documento está vazio não faz sentido: não há documento.
-                boolean vazio = !cortado && matcher.pareceDocumentoVazio(html);
+                boolean vazio = !cortado && leitura.documentoVazio();
 
                 yield new ResultadoScraping(alvo.host(), true, null, assinaturas, bytes, urlFinal,
                         vazio, Instant.now(), Duration.between(inicio, Instant.now()));
@@ -328,16 +358,25 @@ public class ScrapingWorker {
     private void registrarMetricas(ResultadoScraping resultado) {
         duracaoDaAnalise.record(resultado.duracao());
         bytesBaixados.record(resultado.bytesBaixados());
+        execucoes[indiceDoDesfecho(resultado)].increment();
+    }
 
-        // Uma tag por motivo, com "sucesso" como valor quando deu certo. Uma métrica só,
-        // com cardinalidade limitada pelo enum, em vez de um contador por caso.
-        String motivo = resultado.sucesso() ? "sucesso" : resultado.motivoFalha().name();
-        Counter.builder("chegadebet.preanalise.execucoes")
-                .description("Pré-análises concluídas, por desfecho")
-                .tag("motivo", motivo)
-                .tag("indeterminado", String.valueOf(resultado.indeterminado()))
-                .register(metricas)
-                .increment();
+    /**
+     * Posição do contador deste desfecho na tabela pré-registrada.
+     * <p>
+     * O desfecho é um par fechado: o motivo (sucesso ou um dos valores de
+     * {@link MotivoFalhaScraping}) e um booleano. Isso vira um índice direto — o ordinal
+     * do motivo deslocado um bit à esquerda, com o booleano ocupando o bit zero.
+     * <p>
+     * A tabela é montada na subida. Antes, cada execução chamava
+     * {@code Counter.builder(...).register(...)}: um builder novo, um mapa de tags novo e
+     * uma consulta ao registro do Micrometer, por domínio raspado, para chegar sempre no
+     * mesmo objeto.
+     */
+    private int indiceDoDesfecho(ResultadoScraping resultado) {
+        // O sucesso ocupa a última posição, depois de todos os motivos de falha.
+        int motivo = resultado.sucesso() ? MOTIVOS.length : resultado.motivoFalha().ordinal();
+        return (motivo << 1) | (resultado.indeterminado() ? 1 : 0);
     }
 
     /**

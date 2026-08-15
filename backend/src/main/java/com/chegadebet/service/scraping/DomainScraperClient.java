@@ -7,7 +7,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import javax.net.ssl.SSLException;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.ConnectException;
@@ -23,6 +22,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.IllegalCharsetNameException;
 import java.nio.charset.StandardCharsets;
 import java.nio.charset.UnsupportedCharsetException;
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.function.Predicate;
@@ -229,10 +229,10 @@ public class DomainScraperClient {
             return falha(MotivoFalhaScraping.CONTEUDO_NAO_HTML, uri);
         }
 
-        byte[] corpo = lerAteOTeto(resposta.body());
+        Corpo corpo = lerAteOTeto(resposta);
         String html = decodificar(corpo, resposta);
         return new ResultadoHop.Concluido(
-                new RespostaScraping.Documento(html, uri.toString(), corpo.length, false));
+                new RespostaScraping.Documento(html, uri.toString(), corpo.tamanho(), false));
     }
 
     private ResultadoHop falha(MotivoFalhaScraping motivo, URI uri) {
@@ -285,23 +285,54 @@ public class DomainScraperClient {
      * Fechar o {@code InputStream} no meio derruba a conexão e faz o resto da resposta
      * nunca ser transferido, que é onde a economia acontece de verdade.
      */
-    private byte[] lerAteOTeto(InputStream corpo) throws IOException {
+    private Corpo lerAteOTeto(HttpResponse<InputStream> resposta) throws IOException {
         int teto = propriedades.maxBytesComoInt();
-        // Não pré-aloca o teto inteiro: a maioria das homes cabe em muito menos, e
-        // reservar 100 KB por domínio x concorrência seria memória parada.
-        ByteArrayOutputStream acumulado = new ByteArrayOutputStream(8192);
-        byte[] buffer = new byte[8192];
+        byte[] destino = new byte[capacidadeInicial(resposta, teto)];
+        int total = 0;
 
-        try (corpo) {
+        try (InputStream entrada = resposta.body()) {
             int lidos;
-            while (acumulado.size() < teto && (lidos = corpo.read(buffer)) != -1) {
-                // min() e não 'lidos': a última leitura pode ultrapassar o teto, e gravar
-                // tudo faria o limite valer "teto mais um buffer".
-                int cabem = Math.min(lidos, teto - acumulado.size());
-                acumulado.write(buffer, 0, cabem);
+            while (total < teto && (lidos = entrada.read(destino, total, destino.length - total)) != -1) {
+                total += lidos;
+                if (total == destino.length && total < teto) {
+                    // Só cresce quando o alvo mentiu no Content-Length ou não declarou
+                    // nada. Dobrar, com o teto como limite, faz no máximo mais uma cópia.
+                    destino = Arrays.copyOf(destino, Math.min(destino.length << 1, teto));
+                }
             }
         }
-        return acumulado.toByteArray();
+        return new Corpo(destino, total);
+    }
+
+    /**
+     * Quanto alocar antes de começar a ler.
+     * <p>
+     * Com {@code Content-Length} confiável, o array nasce do tamanho exato e a leitura não
+     * copia nada. Sem ele, começa em 16 KB — que cobre a home da maioria dos alvos medidos
+     * — e dobra até o teto.
+     * <p>
+     * O {@code Content-Length} é usado apenas para <b>dimensionar</b>, nunca para decidir
+     * quando parar: um servidor hostil declara 1 KB e manda um fluxo infinito. Quem para a
+     * leitura é o contador de bytes, e é por isso que o valor declarado ser mentira não
+     * causa problema nenhum aqui.
+     */
+    private int capacidadeInicial(HttpResponse<InputStream> resposta, int teto) {
+        long declarado = resposta.headers().firstValueAsLong("content-length").orElse(-1);
+        if (declarado > 0) {
+            return (int) Math.min(declarado, teto);
+        }
+        return Math.min(16 * 1024, teto);
+    }
+
+    /**
+     * Os bytes lidos e quantos deles valem.
+     * <p>
+     * O array pode ser maior que o conteúdo, e é de propósito: aparar com
+     * {@code Arrays.copyOf} para devolver um array do tamanho exato seria mais uma cópia
+     * de até 100 KB, para produzir algo que só vai ser decodificado em seguida — e
+     * {@code new String(bytes, offset, length, charset)} aceita o comprimento direto.
+     */
+    private record Corpo(byte[] bytes, int tamanho) {
     }
 
     /**
@@ -316,12 +347,12 @@ public class DomainScraperClient {
      * troca a sobra por um caractere de substituição, que não casa com nada — é o
      * comportamento certo, e por isso o modo permissivo em vez de exceção.
      */
-    private String decodificar(byte[] corpo, HttpResponse<InputStream> resposta) {
+    private String decodificar(Corpo corpo, HttpResponse<InputStream> resposta) {
         Charset charset = resposta.headers().firstValue("content-type")
                 .flatMap(tipo -> extrair(CHARSET_NO_CABECALHO, tipo))
                 .or(() -> extrair(CHARSET_NA_META, prefixoAscii(corpo)))
                 .orElse(StandardCharsets.UTF_8);
-        return new String(corpo, charset);
+        return new String(corpo.bytes(), 0, corpo.tamanho(), charset);
     }
 
     private Optional<Charset> extrair(Pattern padrao, String texto) {
@@ -344,8 +375,8 @@ public class DomainScraperClient {
      * inventa substituições — e a declaração de charset é ASCII puro em qualquer
      * codificação que valha a pena considerar.
      */
-    private String prefixoAscii(byte[] corpo) {
-        return new String(corpo, 0, Math.min(corpo.length, BYTES_PARA_FAREJAR_META),
+    private String prefixoAscii(Corpo corpo) {
+        return new String(corpo.bytes(), 0, Math.min(corpo.tamanho(), BYTES_PARA_FAREJAR_META),
                 StandardCharsets.ISO_8859_1);
     }
 

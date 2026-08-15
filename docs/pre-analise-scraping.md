@@ -64,7 +64,25 @@ icon_names=account_balance,...,call_received,casino,check,...
 
 > **Atenção:** dois dos quatro alvos não são classificáveis por palavra-chave no HTML estático. A pré-análise precisa de um resultado `INDETERMINADO` e precisa usá-lo com frequência.
 
-### 2.4 Os falsos positivos são reais
+### 2.4 O custo da própria pré-análise
+
+As medições acima dizem quanto custa a rede. Estas dizem quanto custa o nosso código, medido depois que ele existia — com `Statistics` do Hibernate para o banco e um laço de 200 voltas para o matcher.
+
+| O que | Antes | Depois |
+|---|---|---|
+| Analisar um documento de 100 KB | 5.083 µs | **1.988 µs** |
+| Consultas SQL por domínio | 6,1 | **4,1** |
+| Consultas JPQL por ciclo de 10 domínios | 31 | **11** |
+| Ciclo completo de 10 domínios | 835 ms | **497 ms** |
+
+O perfil apontou dois desperdícios, e nenhum dos dois era o autômato:
+
+- **55% era normalização de texto.** Quatro passagens sobre os 100 KB — `Normalizer.normalize`, uma regex para tirar diacrítico, `toLowerCase`, outra regex para colapsar espaço — cada uma alocando uma String nova. Viraram uma passagem só, escrevendo em um buffer do tamanho certo. Só a normalização antiga (2.837 µs) custava mais que a análise inteira de hoje.
+- **15% era parse repetido.** O worker perguntava duas coisas ao matcher, e cada método parseava o HTML por conta própria.
+
+> **Nota:** o número que **não** mudou é o do Aho-Corasick. A varredura continua custando microssegundos, exatamente como a seção 6.1 previa. Otimizar a varredura seria ruído; o custo estava em volta dela.
+
+### 2.5 Os falsos positivos são reais
 
 | Site de controle | "cassino" | "aposta" | "bet" |
 |---|---|---|---|
@@ -165,6 +183,8 @@ A defesa é o `onlyWholeWords()` do Aho-Corasick, e não uma regex por termo. Ah
 O acento é normalizado dos **dois** lados, dicionário e texto, com `Normalizer.Form.NFD`. O termo em claro guardado na evidência continua sendo a grafia do dicionário: o site escreve "CURACAO EGAMING" e o moderador lê "Curaçao eGaming".
 
 > **Atenção:** o espaço também precisa ser colapsado. Sem isso, o termo `"Pragmatic Play"` nunca casa com `"Pragmatic\n     Play"`, que é como o HTML de verdade vem.
+
+E colapsar espaço **não** é o mesmo que aplicar a regex `\s+`. A classe `\s` do Java não casa `U+00A0`, o espaço não separável, e o Jsoup preserva esse caractere no valor de um atributo — só o converte no texto do corpo. Na prática, `Pragmatic&nbsp;Play` em uma `meta description` não era encontrado, e meta tag é exatamente onde estava o único sinal do `blaze.com`. O laço de normalização testa `c <= ' ' || c == 0x00A0` e resolve os dois casos.
 
 ### 4.3 Descartar as fontes conhecidas de falso positivo — Jsoup
 
@@ -287,6 +307,9 @@ Falta medir duas coisas, e as duas exigem dados de produção:
 | `RegistroPreAnalise` | A transação: grava a medição e dispara o recálculo do score. |
 | `SinalScraping` / `V5` | O histórico, uma linha por tentativa, nunca sobrescrita. |
 | `ModeracaoService` | O peso de cada tipo de sinal no score. |
+| `V6` + `Dominio.ultimaPreAnaliseEm` | A data denormalizada que serve o cooldown por índice. |
+
+> **Atenção:** `dominio.ultima_pre_analise_em` é dado derivado de `sinal_scraping.criado_em`. Quem gravar uma medição **tem** que atualizar a coluna na mesma transação. Fora de sincronia, o domínio ou é raspado antes da hora, ou nunca mais — e nada falha, então o sintoma seria só trabalho repetido ou uma fila parada.
 
 A separação entre `ScrapingWorker` e `RegistroPreAnalise` não é estilo. A parte de rede roda em virtual threads, fora de qualquer transação; a gravação precisa de um limite transacional próprio, e um método `@Transactional` chamado de dentro da mesma classe não passa pelo proxy do Spring — a anotação seria ignorada em silêncio.
 
