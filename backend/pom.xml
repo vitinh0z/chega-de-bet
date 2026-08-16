@@ -23,6 +23,8 @@
         <mapstruct.version>1.6.3</mapstruct.version>
         <lombok-mapstruct-binding.version>0.2.0</lombok-mapstruct-binding.version>
         <bucket4j.version>8.10.1</bucket4j.version>
+        <ahocorasick.version>0.6.3</ahocorasick.version>
+        <jsoup.version>1.21.2</jsoup.version>
     </properties>
 
     <dependencies>
@@ -101,6 +103,49 @@
             <artifactId>bucket4j-core</artifactId>
             <version>${bucket4j.version}</version>
         </dependency>
+
+        <!-- ===== Pré-análise de domínio (scraper) ===== -->
+
+        <!-- Casamento de muitos termos em uma passagem só (Aho-Corasick).
+             Um Trie imutável, construído uma vez na subida, varre o texto em O(n) no
+             tamanho do texto — independente de quantos termos o dicionário tem. Com
+             regex seria uma passagem por termo, e o dicionário cresce a cada provedor
+             ou licenciadora nova.
+             onlyWholeWords() é o motivo de não escrevermos o autômato à mão: sem
+             fronteira de palavra, "bet" casa com Betim, diabetes e Roberto. -->
+        <dependency>
+            <groupId>org.ahocorasick</groupId>
+            <artifactId>ahocorasick</artifactId>
+            <version>${ahocorasick.version}</version>
+        </dependency>
+
+        <!-- Parser de HTML.
+             Entrou porque a medição em docs/pre-analise-scraping.md mostrou que a maior
+             fonte de falso positivo é texto que não é texto da página: nome de arquivo
+             (betbr-blaze-prodfavicon.ico), variável CSS (bet-win-color) e lista de
+             ícones do Material Symbols (icon_names=...,casino,...). Todos vivem dentro
+             de <script>, <style> ou de atributos. Casar sobre o HTML cru contaria os
+             três; o Jsoup separa <title>, <meta> e o texto visível, e o resto é
+             descartado antes do matcher ver.
+             Falso positivo é falha crítica neste projeto — a dependência paga por si. -->
+        <dependency>
+            <groupId>org.jsoup</groupId>
+            <artifactId>jsoup</artifactId>
+            <version>${jsoup.version}</version>
+        </dependency>
+
+        <!-- Cliente HTTP: nenhuma dependência.
+             Ficamos com o java.net.http.HttpClient do próprio JDK, em vez de OkHttp ou
+             Apache HttpClient, por três motivos:
+               1. Precisamos DESLIGAR o follow-redirect automático e avaliar cada hop
+                  contra o guarda de SSRF (ver GuardaSsrf). Redirects.NEVER é nativo, e
+                  seguir na mão é o mesmo trabalho em qualquer uma das libs.
+               2. BodyHandlers.ofInputStream() dá leitura em fluxo com corte duro no teto
+                  de bytes, que é a única otimização de rede que importa aqui.
+               3. Zero dependência nova a auditar em um projeto que roda em free tier e
+                  faz requisição para domínio arbitrário submetido por terceiro.
+             OkHttp só ganharia em pool de conexão por host, e a pré-análise abre no
+             máximo uma conexão por host, uma vez a cada cooldown. -->
 
         <!-- MapStruct (mapeamento entidade <-> DTO) -->
         <dependency>

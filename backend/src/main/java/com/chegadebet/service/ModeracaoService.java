@@ -3,14 +3,18 @@ package com.chegadebet.service;
 import com.chegadebet.config.ModeracaoProperties;
 import com.chegadebet.domain.enums.StatusDominio;
 import com.chegadebet.domain.enums.TipoDecisao;
+import com.chegadebet.domain.enums.TipoSinalScraping;
 import com.chegadebet.domain.model.DecisaoModeracao;
 import com.chegadebet.domain.model.Dominio;
+import com.chegadebet.domain.model.SinalScraping;
+import com.chegadebet.domain.scraping.AssinaturaEncontrada;
 import com.chegadebet.exception.EstadoInvalidoException;
 import com.chegadebet.exception.RecursoNaoEncontradoException;
 import com.chegadebet.mapper.DominioMapper;
 import com.chegadebet.repository.DecisaoModeracaoRepository;
 import com.chegadebet.repository.DenunciaRepository;
 import com.chegadebet.repository.DominioRepository;
+import com.chegadebet.repository.SinalScrapingRepository;
 import com.chegadebet.web.dto.DominioResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,7 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -46,8 +50,10 @@ import java.util.UUID;
 @Service
 public class ModeracaoService {
 
-    // Fórmula do score: peso do volume + peso da recência.
-    //   score = (denunciantes distintos x 10) + (denunciantes distintos nos últimos 7 dias x 5)
+    // Fórmula do score: peso do volume + peso da recência + peso da pré-análise.
+    //   score = (denunciantes distintos x 10)
+    //         + (denunciantes distintos nos últimos 7 dias x 5)
+    //         + (peso do tipo de cada sinal da última pré-análise)
     // Os pesos são arbitrários, mas a ordem entre eles é deliberada: o volume total é o
     // sinal principal e a recência entra como desempate — um domínio ativo esta semana
     // sobe na fila sem ultrapassar um caso muito mais denunciado.
@@ -55,24 +61,50 @@ public class ModeracaoService {
     private static final int PESO_RECENCIA = 5;
     private static final Duration JANELA_RECENCIA = Duration.ofDays(7);
 
+    /**
+     * Quanto cada tipo de evidência da pré-análise soma no score.
+     * <p>
+     * A escala segue a força medida do sinal, e não a intuição sobre a palavra. O sufixo
+     * {@code .bet.br} é o topo porque é um fato registrado no domínio de primeiro nível,
+     * não uma inferência. Provedor de slots e licenciadora vêm logo abaixo porque são
+     * integrações e selos contratados — ninguém carrega o script do Pragmatic Play por
+     * engano. A palavra-chave genérica fica no chão porque a medição a encontrou seis
+     * vezes em um site de jornalismo.
+     * <p>
+     * Nada aqui muda status. O score só ordena a fila: um domínio com o topo da escala em
+     * todos os tipos continua {@code EM_ANALISE} até um moderador decidir.
+     */
+    private static final Map<TipoSinalScraping, Integer> PESO_POR_SINAL = Map.of(
+            TipoSinalScraping.DOMINIO_BET_BR, 40,
+            TipoSinalScraping.PROVEDOR_SLOTS, 30,
+            TipoSinalScraping.LICENCIADORA, 30,
+            TipoSinalScraping.KYC_DEPOSITO, 15,
+            TipoSinalScraping.PALAVRA_CHAVE, 5);
+
     private final DominioRepository dominioRepository;
     private final DenunciaRepository denunciaRepository;
     private final DecisaoModeracaoRepository decisaoRepository;
+    private final SinalScrapingRepository sinalScrapingRepository;
     private final DominioMapper dominioMapper;
     private final ModeracaoProperties properties;
+    private final ProtecaoAllowlist protecaoAllowlist;
     private final BlocklistPublisher blocklistPublisher;
 
     public ModeracaoService(DominioRepository dominioRepository,
                             DenunciaRepository denunciaRepository,
                             DecisaoModeracaoRepository decisaoRepository,
+                            SinalScrapingRepository sinalScrapingRepository,
                             DominioMapper dominioMapper,
                             ModeracaoProperties properties,
+                            ProtecaoAllowlist protecaoAllowlist,
                             BlocklistPublisher blocklistPublisher) {
         this.dominioRepository = dominioRepository;
         this.denunciaRepository = denunciaRepository;
         this.decisaoRepository = decisaoRepository;
+        this.sinalScrapingRepository = sinalScrapingRepository;
         this.dominioMapper = dominioMapper;
         this.properties = properties;
+        this.protecaoAllowlist = protecaoAllowlist;
         this.blocklistPublisher = blocklistPublisher;
     }
 
@@ -193,6 +225,16 @@ public class ModeracaoService {
      * não são mais urgentes que 10 desta semana.
      * <p>
      * Aproveita a passagem para reavaliar a rejeição (ver {@link #rejeitar}).
+     *
+     * <h2>A parcela da pré-análise</h2>
+     * As evidências da <b>última</b> medição somam ao score, com peso por tipo de sinal
+     * ({@link #PESO_POR_SINAL}). É recalculado tanto quando chega uma denúncia nova quanto
+     * quando chega uma medição nova, e por isso as duas parcelas sempre refletem o mesmo
+     * instante.
+     * <p>
+     * Só a última medição conta. Somar o histórico faria um domínio raspado dez vezes
+     * valer dez vezes mais que o mesmo domínio raspado uma vez — o score mediria a
+     * frequência do nosso worker, não o domínio.
      */
     @Transactional
     public void recalcularScore(Dominio dominio) {
@@ -200,9 +242,33 @@ public class ModeracaoService {
         long recentes = denunciaRepository.countDenunciantesDistintosDesde(
                 dominio, Instant.now().minus(JANELA_RECENCIA));
 
-        dominio.setScore((int) (distintos * PESO_VOLUME + recentes * PESO_RECENCIA));
+        long total = distintos * PESO_VOLUME + recentes * PESO_RECENCIA + pontuarPreAnalise(dominio);
+
+        dominio.setScore((int) total);
         reabrirSeVoltouAoRadar(dominio);
         dominioRepository.save(dominio);
+    }
+
+    /**
+     * Quanto a última pré-análise soma ao score.
+     * <p>
+     * Cada <b>tipo</b> de sinal conta uma vez, por mais evidências daquele tipo que a
+     * medição tenha encontrado. Sem esse corte, uma página que repete "cassino" quarenta
+     * vezes ultrapassaria uma que exibe o selo de uma licenciadora — e a segunda é
+     * incomparavelmente mais forte que a primeira.
+     * <p>
+     * Falha técnica vale zero, e não um valor negativo. Uma casa de aposta atrás de um WAF
+     * que recusa robôs não é menos casa de aposta por isso.
+     */
+    private int pontuarPreAnalise(Dominio dominio) {
+        return sinalScrapingRepository.findTopByDominioOrderByCriadoEmDesc(dominio)
+                .filter(SinalScraping::isSucesso)
+                .map(sinal -> sinal.getAssinaturas().stream()
+                        .map(AssinaturaEncontrada::tipo)
+                        .distinct()
+                        .mapToInt(tipo -> PESO_POR_SINAL.getOrDefault(tipo, 0))
+                        .sum())
+                .orElse(0);
     }
 
     /**
@@ -211,12 +277,7 @@ public class ModeracaoService {
      * então esses casos exigem dois moderadores em vez de um.
      */
     private boolean exigeQuorum(Dominio dominio) {
-        String host = dominio.getHost().toLowerCase(Locale.ROOT);
-        return properties.allowlist().stream()
-                .map(entrada -> entrada.toLowerCase(Locale.ROOT))
-                // O "." antes da entrada não é detalhe: com endsWith(entrada) puro, o host
-                // malgov.br casaria com gov.br e ganharia uma proteção que não é dele.
-                .anyMatch(entrada -> host.equals(entrada) || host.endsWith("." + entrada));
+        return protecaoAllowlist.protege(dominio.getHost());
     }
 
     /**

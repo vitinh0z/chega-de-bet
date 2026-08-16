@@ -75,3 +75,31 @@ chegadebet:
       - jogadoresanonimos.org.br
     # Denunciantes distintos NOVOS, após a última rejeição, que devolvem o domínio à fila.
     limiar-reabertura: 5
+
+  # Pré-análise de domínio: busca sinais de aposta no HTML e entrega evidência ao
+  # moderador. Nunca decide status sozinha. Ver docs/pre-analise-scraping.md.
+  scraper:
+    # Desligue aqui se a pré-análise incomodar um alvo ou estourar o orçamento de rede.
+    habilitado: true
+    # De quanto em quanto tempo o worker drena a fila. A fila EM_ANALISE só encolhe por
+    # decisão humana, então um intervalo curto só repetiria trabalho já feito.
+    intervalo: PT5M
+    # O pior TTFB medido foi 0,73s. 5s cobre rede ruim sem prender a thread.
+    timeout-conexao: PT5S
+    # Teto da requisição inteira: pega o alvo que entrega 1 byte por segundo.
+    timeout-total: PT15S
+    # O sinal mora no <head>, nos primeiros 0,4% do documento. 100KB é folga larga.
+    max-bytes: 100KB
+    # Identificável de propósito: quem for raspado consegue descobrir quem raspou.
+    user-agent: "ChegaDeBet-PreAnalise/1.0 (+https://github.com/vitinh0z/chega-de-bet)"
+    # Corta laço de redirecionamento. Cada hop é revalidado contra SSRF.
+    max-redirects: 3
+    # 2 = uma repetição, só para falha transitória. Nunca insista em 403 ou 429.
+    max-tentativas: 2
+    espera-entre-tentativas: PT2S
+    # Domínio já tentado só volta à fila depois disto, com ou sem sucesso.
+    cooldown: PT24H
+    # Protege a VM da Fase 1 e evita virar enxurrada na perspectiva de quem recebe.
+    concorrencia: 5
+    # Teto de domínios por ciclo: limita a memória de uma execução.
+    lote-maximo: 50
