@@ -14,6 +14,7 @@ import com.chegadebet.repository.ContagemDenunciantes;
 import com.chegadebet.repository.DominioRepository;
 import com.chegadebet.repository.SinalScrapingRepository;
 import com.chegadebet.web.dto.DominioResponse;
+import com.chegadebet.web.dto.PaginaResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,6 +22,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
@@ -309,19 +315,47 @@ class ModeracaoServiceTest {
     }
 
     @Test
-    @DisplayName("listarFila devolve os domínios EM_ANALISE, do maior score para o menor")
+    @DisplayName("listarFila devolve uma página de domínios EM_ANALISE com os totais")
     void listarFila() {
         Dominio primeiro = new Dominio();
         primeiro.setId(UUID.randomUUID());
         primeiro.setHost("a.com");
         primeiro.setStatus(StatusDominio.EM_ANALISE);
         primeiro.setScore(50);
-        when(dominioRepository.findByStatusOrderByScoreDesc(StatusDominio.EM_ANALISE))
-                .thenReturn(List.of(primeiro));
 
-        assertThat(moderacaoService.listarFila())
+        // 7 itens no total, página de 5: o cliente precisa saber que existe uma segunda.
+        when(dominioRepository.findByStatus(eq(StatusDominio.EM_ANALISE), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(primeiro), PageRequest.of(0, 5), 7));
+
+        PaginaResponse<DominioResponse> pagina = moderacaoService.listarFila(0, 5);
+
+        assertThat(pagina.itens())
                 .singleElement()
                 .satisfies(response -> assertThat(response.host()).isEqualTo("a.com"));
+        assertThat(pagina.totalDeItens()).isEqualTo(7);
+        assertThat(pagina.totalDePaginas()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("A ordem da fila é do serviço: score DESC, e o mais antigo desempata")
+    void ordemDaFilaTemDesempateDeterministico() {
+        when(dominioRepository.findByStatus(any(), any(Pageable.class)))
+                .thenReturn(Page.empty());
+
+        moderacaoService.listarFila(2, 25);
+
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(dominioRepository).findByStatus(eq(StatusDominio.EM_ANALISE), captor.capture());
+        Pageable pageable = captor.getValue();
+
+        assertThat(pageable.getPageNumber()).isEqualTo(2);
+        assertThat(pageable.getPageSize()).isEqualTo(25);
+
+        // Sem o desempate, dois domínios de mesmo score podem trocar de lugar entre a
+        // página 0 e a 1 — e um deles some da fila. A ordenação precisa ser TOTAL.
+        assertThat(pageable.getSort()).containsExactly(
+                Sort.Order.desc("score"),
+                Sort.Order.asc("criadoEm"));
     }
 
     @Test
