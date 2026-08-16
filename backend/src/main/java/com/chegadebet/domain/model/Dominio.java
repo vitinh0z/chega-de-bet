@@ -33,6 +33,23 @@ public class Dominio {
     @Column(nullable = false)
     private int score;
 
+    /**
+     * Quando a última pré-análise deste domínio aconteceu, com ou sem sucesso.
+     * <p>
+     * {@code null} significa "nunca raspado", e é quem tem prioridade na fila: é onde a
+     * pré-análise ainda pode dizer algo novo ao moderador.
+     * <p>
+     * É um dado derivado de {@code sinal_scraping}, duplicado aqui de propósito. Buscá-lo
+     * por subconsulta forçava a fila {@code EM_ANALISE} inteira a ser materializada e
+     * agregada a cada ciclo, porque a chave de ordenação não existia em índice nenhum.
+     * Com a coluna, filtro e ordenação saem de {@code ix_dominio_fila_pre_analise}.
+     * <p>
+     * Quem grava um {@code SinalScraping} tem a obrigação de atualizar este campo na mesma
+     * transação — ver {@code RegistroPreAnalise}.
+     */
+    @Column(name = "ultima_pre_analise_em")
+    private Instant ultimaPreAnaliseEm;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private Instant criadoEm;

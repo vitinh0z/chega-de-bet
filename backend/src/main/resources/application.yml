@@ -2,6 +2,24 @@ spring:
   application:
     name: chega-de-bet-backend
 
+  threads:
+    # Cada requisição HTTP passa a rodar em uma virtual thread, em vez de disputar as 200
+    # threads de plataforma do pool do Tomcat.
+    #
+    # Vale a pena aqui porque o trabalho desta API é quase todo espera de I/O: consulta ao
+    # Postgres e, no caminho da denúncia, nada de CPU. Com o pool fixo, 200 requisições
+    # lentas de banco esgotam o pool e a 201ª fica na fila, mesmo com a CPU ociosa. Com
+    # virtual thread, quem espera I/O devolve a carrier thread e não ocupa nada.
+    #
+    # Só é seguro a partir do Java 24: até o 23, um bloco 'synchronized' que fizesse I/O
+    # prendia a carrier thread (pinning), e o pool efetivo voltava a ser o número de
+    # núcleos. O JEP 491 acabou com isso, e este projeto roda em Java 25.
+    #
+    # O limite real deixa de ser o pool e passa a ser o pool de conexões do HikariCP —
+    # que é o que ele deveria ter sido desde sempre.
+    virtual:
+      enabled: true
+
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/chegadebet}
     username: ${DB_USERNAME:chegadebet}

@@ -74,12 +74,19 @@ public class RegistroPreAnalise {
             return;
         }
 
-        sinalScrapingRepository.save(comoEntidade(dominio, resultado));
+        SinalScraping sinal = sinalScrapingRepository.save(comoEntidade(dominio, resultado));
 
-        // A ordem importa: o recálculo lê a última medição do banco, então ele precisa
-        // acontecer depois do save. Como os dois estão na mesma transação, o Hibernate
-        // faz o flush antes da consulta e a medição recém-gravada já é visível.
-        moderacaoService.recalcularScore(dominio);
+        // Obrigatório, e na mesma transação: é esta coluna que a seleção do próximo lote
+        // consulta para aplicar o cooldown. Se ela sair de sincronia com sinal_scraping, o
+        // domínio ou é raspado de novo antes da hora, ou nunca mais.
+        //
+        // O valor é exatamente o mesmo instante gravado na medição — as duas colunas
+        // precisam bater, porque a migration V6 preencheu uma a partir da outra.
+        dominio.setUltimaPreAnaliseEm(sinal.getCriadoEm());
+
+        // A pontuação vem da medição em mãos, não de uma releitura. O score já sabe o que
+        // acabamos de gravar.
+        moderacaoService.recalcularScore(dominio, ModeracaoService.pontuar(sinal));
     }
 
     private SinalScraping comoEntidade(Dominio dominio, ResultadoScraping resultado) {
@@ -92,6 +99,8 @@ public class RegistroPreAnalise {
         sinal.setUrlFinal(resultado.urlFinal());
         sinal.setDocumentoVazio(resultado.documentoVazio());
         sinal.setDuracaoMs(resultado.duracao().toMillis());
+        // O instante da medição, não o do flush. Ver o javadoc de SinalScraping.criadoEm.
+        sinal.setCriadoEm(resultado.executadoEm());
         return sinal;
     }
 }

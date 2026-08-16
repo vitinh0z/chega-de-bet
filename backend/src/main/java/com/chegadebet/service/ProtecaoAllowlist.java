@@ -18,14 +18,26 @@ import java.util.Locale;
 @Component
 public class ProtecaoAllowlist {
 
-    private final List<String> entradas;
+    /** As entradas em minúsculas: casam o host exato. */
+    private final String[] exatas;
+
+    /**
+     * As mesmas entradas já com o ponto na frente: casam os subdomínios.
+     * <p>
+     * Pré-montadas na construção porque a versão anterior fazia {@code "." + entrada}
+     * <b>dentro</b> do laço — uma String nova por entrada, por host testado, em um método
+     * chamado para cada domínio de cada ciclo do worker. A lista não muda em tempo de
+     * execução, então essa concatenação tinha sempre o mesmo resultado.
+     */
+    private final String[] sufixos;
 
     public ProtecaoAllowlist(ModeracaoProperties properties) {
-        // Normalizado uma vez na construção: a lista não muda em tempo de execução, e
-        // repetir o toLowerCase a cada host da fila é trabalho jogado fora.
-        this.entradas = properties.allowlist().stream()
+        List<String> normalizadas = properties.allowlist().stream()
                 .map(entrada -> entrada.toLowerCase(Locale.ROOT))
                 .toList();
+
+        this.exatas = normalizadas.toArray(String[]::new);
+        this.sufixos = normalizadas.stream().map(entrada -> "." + entrada).toArray(String[]::new);
     }
 
     /**
@@ -35,10 +47,18 @@ public class ProtecaoAllowlist {
      * Casa o host exato e os subdomínios. O ponto antes da entrada não é detalhe: com
      * {@code endsWith(entrada)} puro, {@code malgov.br} casaria com {@code gov.br} e
      * ganharia uma proteção que não é dele.
+     * <p>
+     * Laço sobre array em vez de {@code stream().anyMatch()}: o método é chamado uma vez
+     * por domínio da fila, e o stream monta um pipeline de objetos a cada chamada para
+     * percorrer três entradas.
      */
     public boolean protege(String host) {
         String normalizado = host.toLowerCase(Locale.ROOT);
-        return entradas.stream()
-                .anyMatch(entrada -> normalizado.equals(entrada) || normalizado.endsWith("." + entrada));
+        for (int i = 0; i < exatas.length; i++) {
+            if (normalizado.equals(exatas[i]) || normalizado.endsWith(sufixos[i])) {
+                return true;
+            }
+        }
+        return false;
     }
 }

@@ -44,16 +44,22 @@ public interface DominioRepository extends JpaRepository<Dominio, UUID> {
      * A allowlist de proteção <b>não</b> é filtrada aqui: ela casa por sufixo
      * ({@code gov.br} protege {@code noticias.gov.br}), e SQL não expressa isso sem um
      * {@code LIKE} por entrada. O corte fica no worker, via {@code ProtecaoAllowlist}.
+     *
+     * <h2>Sem subconsulta</h2>
+     * A versão anterior perguntava as duas coisas ao {@code SinalScraping}, por
+     * subconsulta correlacionada: um {@code NOT EXISTS} no filtro e um {@code MAX} no
+     * {@code ORDER BY}. O segundo era o caro — uma chave de ordenação que só existe depois
+     * de agregar outra tabela não cabe em índice nenhum, então o banco materializava a
+     * fila inteira e ordenava em memória a cada ciclo.
+     * <p>
+     * Com {@code ultimaPreAnaliseEm} no próprio domínio, filtro e ordenação saem os dois
+     * de {@code ix_dominio_fila_pre_analise}, em uma varredura de faixa.
      */
     @Query("""
             SELECT d FROM Dominio d
             WHERE d.status = :status
-              AND NOT EXISTS (
-                  SELECT 1 FROM SinalScraping s
-                  WHERE s.dominio = d AND s.criadoEm > :limite
-              )
-            ORDER BY (SELECT MAX(s2.criadoEm) FROM SinalScraping s2 WHERE s2.dominio = d) ASC NULLS FIRST,
-                     d.score DESC
+              AND (d.ultimaPreAnaliseEm IS NULL OR d.ultimaPreAnaliseEm <= :limite)
+            ORDER BY d.ultimaPreAnaliseEm ASC NULLS FIRST, d.score DESC
             """)
     List<Dominio> buscarElegiveisParaPreAnalise(@Param("status") StatusDominio status,
                                                 @Param("limite") Instant limite,

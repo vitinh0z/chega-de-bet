@@ -163,6 +163,25 @@ class ScrapingWorkerFimAFimTest {
     }
 
     @Test
+    @DisplayName("A data da medição é gravada no domínio, e bate com a do sinal")
+    void mantemADataDaPreAnaliseNoDominio() {
+        Dominio dominio = criarEmAnalise(ALVO_COM_SINAIS);
+
+        worker.executarCiclo();
+
+        SinalScraping sinal = ultimaMedicaoDe(dominio);
+        Dominio recarregado = dominioRepository.findById(dominio.getId()).orElseThrow();
+
+        // A coluna denormalizada é o que a seleção do lote consulta. Se ela ficar nula, o
+        // cooldown some inteiro e a fila é re-raspada a cada ciclo — em silêncio, porque
+        // nada falha: só passa a fazer trabalho repetido para sempre.
+        assertThat(recarregado.getUltimaPreAnaliseEm())
+                .as("dominio.ultimaPreAnaliseEm")
+                .isNotNull()
+                .isEqualTo(sinal.getCriadoEm());
+    }
+
+    @Test
     @DisplayName("Passado o cooldown, o domínio volta a ser elegível")
     void voltaAFilaDepoisDoCooldown() {
         Dominio dominio = criarEmAnalise(ALVO_QUE_FALHA);
@@ -238,17 +257,26 @@ class ScrapingWorkerFimAFimTest {
     }
 
     /**
-     * Empurra as medições do domínio para trás do cooldown.
+     * Empurra o domínio para trás do cooldown, como se a medição fosse de dois dias atrás.
      * <p>
-     * Direto em SQL porque {@code criado_em} é {@code @CreationTimestamp updatable=false}:
-     * a entidade recusa a alteração, e é isso que se quer em produção — a data de uma
-     * medição gravada não pode ser reescrita depois. O teste precisa contornar a regra, e
-     * não afrouxá-la.
+     * Atualiza as <b>duas</b> colunas, e isso não é zelo: {@code dominio.ultima_pre_analise_em}
+     * é a que a seleção do lote consulta, e {@code sinal_scraping.criado_em} é a que
+     * sustenta a auditoria. Elas são derivadas uma da outra e precisam andar juntas —
+     * mexer só em uma produziria exatamente o estado inconsistente que a denormalização
+     * introduz o risco de ter.
+     * <p>
+     * Direto em SQL porque {@code criado_em} é {@code updatable = false}: a entidade recusa
+     * a alteração, e é isso que se quer em produção — a data de uma medição gravada não
+     * pode ser reescrita depois. O teste contorna a regra sem afrouxá-la.
      */
     private void envelhecerMedicoes(Dominio dominio) {
+        java.sql.Timestamp doisDiasAtras = java.sql.Timestamp.from(
+                java.time.Instant.now().minus(java.time.Duration.ofDays(2)));
+
         jdbcTemplate.update("UPDATE sinal_scraping SET criado_em = ? WHERE dominio_id = ?",
-                java.sql.Timestamp.from(java.time.Instant.now().minus(java.time.Duration.ofDays(2))),
-                dominio.getId());
+                doisDiasAtras, dominio.getId());
+        jdbcTemplate.update("UPDATE dominio SET ultima_pre_analise_em = ? WHERE id = ?",
+                doisDiasAtras, dominio.getId());
     }
 
     @TestConfiguration

@@ -30,6 +30,11 @@ class AssinaturaMatcherTest {
         matcher = new AssinaturaMatcher();
     }
 
+    /** Atalho: a maioria dos testes só olha as assinaturas, não o veredito de vazio. */
+    private static List<AssinaturaEncontrada> assinaturasDe(String html) {
+        return matcher.analisar(html).assinaturas();
+    }
+
     // ===== Detecção por tipo de assinatura =====
 
     @Test
@@ -41,7 +46,7 @@ class AssinaturaMatcherTest {
                 </body></html>
                 """;
 
-        assertThat(matcher.analisarConteudo(html))
+        assertThat(assinaturasDe(html))
                 .extracting(AssinaturaEncontrada::tipo)
                 .contains(TipoSinalScraping.LICENCIADORA);
     }
@@ -51,7 +56,7 @@ class AssinaturaMatcherTest {
     void encontraProvedorDeSlots() {
         String html = "<html><body><p>Jogos de Pragmatic Play e Evolution Gaming</p></body></html>";
 
-        assertThat(matcher.analisarConteudo(html))
+        assertThat(assinaturasDe(html))
                 .extracting(AssinaturaEncontrada::termo)
                 .contains("Pragmatic Play", "Evolution Gaming");
     }
@@ -66,7 +71,7 @@ class AssinaturaMatcherTest {
                 </body></html>
                 """;
 
-        assertThat(matcher.analisarConteudo(html))
+        assertThat(assinaturasDe(html))
                 .extracting(AssinaturaEncontrada::tipo)
                 .contains(TipoSinalScraping.KYC_DEPOSITO);
     }
@@ -79,7 +84,7 @@ class AssinaturaMatcherTest {
                 <body><p>bem-vindo</p></body></html>
                 """;
 
-        assertThat(matcher.analisarConteudo(html))
+        assertThat(assinaturasDe(html))
                 .isNotEmpty()
                 .allMatch(assinatura -> assinatura.trecho() == TrechoDocumento.TITULO);
     }
@@ -94,7 +99,7 @@ class AssinaturaMatcherTest {
                 </head><body></body></html>
                 """;
 
-        assertThat(matcher.analisarConteudo(html))
+        assertThat(assinaturasDe(html))
                 .extracting(AssinaturaEncontrada::trecho)
                 .contains(TrechoDocumento.META);
     }
@@ -145,7 +150,7 @@ class AssinaturaMatcherTest {
                 <body><p>Misture a farinha e os ovos. Leve ao forno por 40 minutos.</p></body></html>
                 """;
 
-        assertThat(matcher.analisarConteudo(html)).isEmpty();
+        assertThat(assinaturasDe(html)).isEmpty();
     }
 
     @Test
@@ -158,7 +163,7 @@ class AssinaturaMatcherTest {
                 </body></html>
                 """;
 
-        assertThat(matcher.analisarConteudo(html)).isEmpty();
+        assertThat(assinaturasDe(html)).isEmpty();
     }
 
     @Test
@@ -178,7 +183,7 @@ class AssinaturaMatcherTest {
                 </body></html>
                 """;
 
-        assertThat(matcher.analisarConteudo(html)).isEmpty();
+        assertThat(assinaturasDe(html)).isEmpty();
     }
 
     @Test
@@ -193,7 +198,7 @@ class AssinaturaMatcherTest {
         // o texto é jornalístico. O que o teste fixa é o LIMITE do dano — só termos do
         // tipo mais fraco, que é o de menor peso no score. Nenhuma licenciadora, nenhum
         // provedor, nenhum termo de depósito. É por isso que o peso é escalonado.
-        assertThat(matcher.analisarConteudo(html))
+        assertThat(assinaturasDe(html))
                 .isNotEmpty()
                 .allMatch(assinatura -> assinatura.tipo() == TipoSinalScraping.PALAVRA_CHAVE);
     }
@@ -205,7 +210,7 @@ class AssinaturaMatcherTest {
     void normalizaAcentoECaixa() {
         String html = "<html><body><p>Licenciado por CURACAO EGAMING</p></body></html>";
 
-        assertThat(matcher.analisarConteudo(html))
+        assertThat(assinaturasDe(html))
                 .extracting(AssinaturaEncontrada::termo)
                 // O site escreveu sem cedilha e em maiúsculas; o moderador vê a grafia
                 // do dicionário.
@@ -220,9 +225,28 @@ class AssinaturaMatcherTest {
                        Play</p></body></html>
                 """;
 
-        assertThat(matcher.analisarConteudo(html))
+        assertThat(assinaturasDe(html))
                 .extracting(AssinaturaEncontrada::termo)
                 .contains("Pragmatic Play");
+    }
+
+    @Test
+    @DisplayName("Espaço não separável (&nbsp;) em meta tag não impede o casamento")
+    void colapsaEspacoNaoSeparavel() {
+        // Regressão real, encontrada ao trocar a normalização por uma passagem única.
+        // O Jsoup converte &nbsp; para espaço comum no texto do corpo, MAS preserva o
+        // U+00A0 no valor de um atributo. E a classe \s da regex do Java não casa U+00A0.
+        // Resultado: este termo não era encontrado — e meta tag é exatamente onde estava
+        // o único sinal do blaze.com na medição.
+        String html = """
+                <html><head>
+                  <meta name="description" content="Jogos de Pragmatic&nbsp;Play e roleta ao&nbsp;vivo">
+                </head><body></body></html>
+                """;
+
+        assertThat(assinaturasDe(html))
+                .extracting(AssinaturaEncontrada::termo)
+                .contains("Pragmatic Play", "roleta ao vivo");
     }
 
     @Test
@@ -230,7 +254,7 @@ class AssinaturaMatcherTest {
     void naoRepeteOMesmoTermo() {
         String html = "<html><body><p>cassino cassino cassino cassino</p></body></html>";
 
-        assertThat(matcher.analisarConteudo(html))
+        assertThat(assinaturasDe(html))
                 .filteredOn(assinatura -> assinatura.termo().equals("cassino"))
                 .hasSize(1);
     }
@@ -243,8 +267,8 @@ class AssinaturaMatcherTest {
         // O caso do esportesdasorte.com: 10 KB de Angular, <title> vazio, zero sinais.
         String html = "<html><head><title></title></head><body><app-root></app-root></body></html>";
 
-        assertThat(matcher.analisarConteudo(html)).isEmpty();
-        assertThat(matcher.pareceDocumentoVazio(html)).isTrue();
+        assertThat(assinaturasDe(html)).isEmpty();
+        assertThat(matcher.analisar(html).documentoVazio()).isTrue();
     }
 
     @Test
@@ -255,7 +279,7 @@ class AssinaturaMatcherTest {
                 <body><p>Pão francês, bolos e salgados. Rua das Flores, 100.</p></body></html>
                 """;
 
-        assertThat(matcher.pareceDocumentoVazio(html)).isFalse();
+        assertThat(matcher.analisar(html).documentoVazio()).isFalse();
     }
 
     // ===== Desempenho =====
@@ -269,10 +293,10 @@ class AssinaturaMatcherTest {
         assertThat(html.length()).isGreaterThan(100 * 1024);
 
         // Aquece a JVM: a primeira passagem paga JIT e não mede o autômato.
-        matcher.analisarConteudo(html);
+        assinaturasDe(html);
 
         Instant inicio = Instant.now();
-        List<AssinaturaEncontrada> encontradas = matcher.analisarConteudo(html);
+        List<AssinaturaEncontrada> encontradas = assinaturasDe(html);
         Duration decorrido = Duration.between(inicio, Instant.now());
 
         assertThat(encontradas).extracting(AssinaturaEncontrada::termo).contains("Pragmatic Play");

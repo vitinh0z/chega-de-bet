@@ -98,6 +98,43 @@ class GuardaSsrfTest {
 
     // ===== O que deve passar =====
 
+    @ParameterizedTest(name = "recusa a faixa de documentação {0}")
+    @DisplayName("Faixas de documentação (RFC 5737) também ficam de fora")
+    @ValueSource(strings = {
+            "https://192.0.2.1/",
+            "https://198.51.100.7/",
+            "https://203.0.113.42/"
+    })
+    void recusaFaixasDeDocumentacao(String url) {
+        // Passaram a ser bloqueadas ao reescrever a checagem como tabela CIDR. Não têm uso
+        // legítimo na internet, e em laboratório costumam apontar para dentro.
+        assertThat(guarda.avaliar(URI.create(url)))
+                .contains(MotivoFalhaScraping.SSRF_BLOQUEADO);
+    }
+
+    @ParameterizedTest(name = "libera o vizinho de faixa {0}")
+    @DisplayName("O bloqueio para exatamente na borda da faixa, sem pegar o vizinho")
+    @ValueSource(strings = {
+            // 172.16/12 termina em 172.31.255.255 — 172.32 é público.
+            "https://172.32.0.1/",
+            // 100.64/10 termina em 100.127.255.255 — 100.128 é público.
+            "https://100.128.0.1/",
+            // 198.18/15 cobre só 198.18 e 198.19.
+            "https://198.20.0.1/",
+            // 169.254/16 não se estende para 169.255.
+            "https://169.255.0.1/",
+            // 192.0.0.0/24 e 192.0.2.0/24 são recortes: 192.0.1.1 fica fora dos dois.
+            "https://192.0.1.1/",
+            // 9.0.0.1 e 11.0.0.1 abraçam o 10/8 sem entrar nele.
+            "https://11.0.0.1/"
+    })
+    void naoTransbordaAFaixa(String url) {
+        // Errar o limite de uma faixa em um endereço é o defeito clássico desse tipo de
+        // checagem, e era mais fácil de cometer quando ela era escrita octeto a octeto,
+        // com intervalos à mão. Com máscara CIDR o limite sai do prefixo.
+        assertThat(guarda.avaliar(URI.create(url))).isEmpty();
+    }
+
     @Test
     @DisplayName("Endereço público é liberado")
     void liberaEnderecoPublico() {
